@@ -75,7 +75,7 @@ func TelnetServer() error {
 		Addr: "127.0.0.1",
 		Port: 4100,
 	}
-	if _, err := tcpService.New(); err != nil {
+	if err := tcpService.New(); err != nil {
 		fmt.Printf("socket tcp init fail: %s\n", err.Error())
 		return err
 	}

@@ -15,7 +15,7 @@ type SocketUDP struct {
 }
 
 // New 创建UDP服务端
-func (s *SocketUDP) New() (*SocketUDP, error) {
+func (s *SocketUDP) New() error {
 	// IPV6地址协议
 	proto := "udp"
 	if strings.Contains(s.Addr, ":") {
@@ -27,18 +27,18 @@ func (s *SocketUDP) New() (*SocketUDP, error) {
 	// 解析 UDP 地址
 	udpAddr, err := net.ResolveUDPAddr(proto, address)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// 监听 UDP 地址
 	conn, err := net.ListenUDP("udp", udpAddr)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	s.Conn = conn
 	s.StopChan = make(chan struct{}, 1)
-	return s, nil
+	return nil
 }
 
 // CloseService 关闭当前UDP服务端

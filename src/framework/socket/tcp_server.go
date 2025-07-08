@@ -15,7 +15,7 @@ type SocketTCP struct {
 }
 
 // New 创建TCP服务端
-func (s *SocketTCP) New() (*SocketTCP, error) {
+func (s *SocketTCP) New() error {
 	// IPV6地址协议
 	proto := "tcp"
 	if strings.Contains(s.Addr, ":") {
@@ -27,18 +27,18 @@ func (s *SocketTCP) New() (*SocketTCP, error) {
 	// 解析 TCP 地址
 	tcpAddr, err := net.ResolveTCPAddr(proto, address)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// 监听 TCP 地址
 	listener, err := net.ListenTCP(proto, tcpAddr)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	s.Listener = listener
 	s.StopChan = make(chan struct{}, 1)
-	return s, nil
+	return nil
 }
 
 // Close 关闭当前TCP服务端
