@@ -15,11 +15,11 @@ import (
 )
 
 // Engine 初始HTTP路由引擎
-func Engine() *gin.Engine {
+func Engine(dev bool) *gin.Engine {
 	var app *gin.Engine
 
 	// 根据运行环境注册引擎
-	if !config.Dev() {
+	if !dev {
 		gin.SetMode(gin.ReleaseMode)
 		app = gin.New()
 		app.Use(gin.Recovery())

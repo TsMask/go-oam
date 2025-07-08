@@ -92,6 +92,6 @@ func (o *Opts) Run() error {
 		return fmt.Errorf("oam is not enable")
 	}
 
-	modules.RouteService(o.setupArr)
+	modules.RouteService(config.Dev(), o.setupArr)
 	return nil
 }
