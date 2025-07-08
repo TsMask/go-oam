@@ -5,7 +5,6 @@ import (
 	"embed"
 	"log"
 	"math"
-	"os"
 	"time"
 
 	"github.com/spf13/viper"
@@ -15,11 +14,10 @@ import (
 var configFile embed.FS
 
 // 程序配置
-var conf *viper.Viper
+var conf *viper.Viper = viper.New()
 
 // 初始化程序配置
 func InitConfig() {
-	conf = viper.New()
 	initViper()
 	// 记录程序开始运行的时间点
 	conf.Set("runTime", time.Now())
@@ -35,11 +33,17 @@ func RunTime() time.Time {
 
 // Enable 是否开启OAM
 func Enable() bool {
+	if conf == nil {
+		return false
+	}
 	return conf.GetBool("enable")
 }
 
 // Dev 运行模式
 func Dev() bool {
+	if conf == nil {
+		return false
+	}
 	return conf.GetBool("dev")
 }
 
@@ -93,49 +97,4 @@ func Set(key string, value any) {
 		return
 	}
 	conf.Set(key, value)
-}
-
-// 程序配置
-var confExt *viper.Viper
-
-// ReadExternalConfig 读取外部文件配置
-func ReadExternalConfig(configPath string) {
-	f, err := os.Open(configPath)
-	if err != nil {
-		log.Fatalf("config external file read error: %s", err)
-		return
-	}
-	defer f.Close()
-	// 合并外部配置
-	if err = conf.MergeConfig(f); err != nil {
-		log.Fatalf("config external file merge error: %s", err)
-		return
-	}
-	// 初始化外部配置
-	confExt = viper.New()
-	confExt.SetConfigType("yaml")
-	if err = confExt.ReadConfig(f); err != nil {
-		log.Fatalf("config external file read error: %s", err)
-		return
-	}
-}
-
-// GetExt 获取外部配置信息
-//
-// GetExt("server.0.ipv4")
-func GetExt(key string) any {
-	return confExt.Get(key)
-}
-
-// SetExt 修改外部配置信息
-//
-// SetExt("server.0.ipv4")
-func SetExt(key string, value any) {
-	confExt.Set(key, value)
-	Set(key, value)
-}
-
-// WriteExternalConfig 写入外部文件配置
-func WriteExternalConfig() {
-	confExt.SafeWriteConfig()
 }
