@@ -1,0 +1,144 @@
+# OAM服务是否开启
+enable: true
+# 路由HTTP服务配置
+route:
+  - host: "0.0.0.0"
+    port: 29565
+    schema: http
+  - host: "0.0.0.0"
+    port: 29567
+    schema: https
+    cert: ./certs/www.omc.net.crt
+    key: ./certs/www.omc.net.key
+
+cryptoapi: false # 是否开启部分接口请求加解密
+
+# AES 加密
+aes:
+  # 接口密钥
+  apiKey: "T9ox2DCzpLfJIPzkH9pKhsOTMOEMJcFv"
+  # 应用密钥
+  appKey: "E83dbfeb35BA4839232e2761b0FE5f32"
+
+# NE 网元相关配置
+ne:
+  type: "OAM" # 类型
+  version: "" # 版本号
+  serialNum: "" # 序列号
+  expiryDate: "2000-01-01" # 过期时间
+  capability: 0 # 容量
+
+# 日志
+logger:
+  fileDir: "/var/log"
+  fileName: "oam.log"
+  level: 2 # 日志记录的等级 0:silent<1:info<2:warn<3:error
+  maxDay: 7 # 日志会保留 180 天
+  maxSize: 10 # 调整按 10MB 大小的切割
+
+# 文件上传
+upload:
+  fileDir: "/usr/local/oam/upload"
+  # 最大上传文件大小，默认为 10mb
+  fileSize: 10
+  # 文件扩展名白名单
+  whitelist:
+    # 图片
+    - ".bmp"
+    - ".webp"
+    - ".gif"
+    - ".jpg"
+    - ".jpeg"
+    - ".png"
+    # word excel powerpoint
+    - ".doc"
+    - ".docx"
+    - ".xls"
+    - ".xlsx"
+    - ".ppt"
+    - ".pptx"
+    # 文本文件
+    - ".html"
+    - ".htm"
+    - ".txt"
+    # pdf
+    - ".pdf"
+    # 压缩文件
+    - ".zip"
+    - ".gz"
+    - ".tgz"
+    - ".gzip"
+    # 音视频格式
+    - ".mp3"
+    - ".mp4"
+    - ".avi"
+    - ".rmvb"
+    # 软件包
+    - ".deb"
+    - ".rpm"
+    # 验证文件
+    - ".ini"
+
+# cors 跨域
+cors:
+  # 设置 Access-Control-Allow-Origin 的值，【默认值】会获取请求头上的 origin
+  # 例如：http://mask-api.org
+  # 如果请求设置了 credentials，则 origin 不能设置为 *
+  origin: "*"
+  # 设置 Access-Control-Allow-Credentials，【默认值】false
+  credentials: true
+  # 设置 Access-Control-Max-Age
+  maxAge: 31536000
+  # 允许跨域的方法，【默认值】为 GET,HEAD,PUT,POST,DELETE,PATCH
+  allowMethods:
+    - "OPTIONS"
+    - "HEAD"
+    - "GET"
+    - "POST"
+    - "PUT"
+    - "DELETE"
+    - "PATCH"
+  # 设置 Access-Control-Allow-Headers 的值，【默认值】会获取请求头上的 Access-Control-Request-Headers
+  allowHeaders:
+    - "X-App-Code"
+    - "X-App-Version"
+    - "Authorization"
+    - "Origin"
+    - "X-Requested-With"
+    - "Content-Type"
+    - "Content-Language"
+    - "Accept-Language"
+    - "Accept"
+    - "Range"
+    # 非标准请求头
+    - "accessToken"
+    - "Accesstoken"
+    - "Operationtype"
+  # 设置 Access-Control-Expose-Headers 的值
+  exposeHeaders:
+    - "X-RepeatSubmit-Rest"
+
+# security 安全
+security:
+  csrf:
+    enable: false
+    type: "referer"
+    # 允许调用的域名地址的，例如：http://<Referer地址>/mask-api
+    refererWhiteList:
+      - "127.0.0.1:33030"
+  xframe:
+    enable: false
+    value: "SAMEORIGIN"
+  csp:
+    enable: true
+  hsts:
+    enable: false
+    maxAge: 31536000
+    includeSubdomains: false
+  noopen:
+    enable: false
+  nosniff:
+    enable: false
+  xssProtection:
+    enable: true
+    value: "1; mode=block"

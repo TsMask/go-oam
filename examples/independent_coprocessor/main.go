@@ -1,0 +1,93 @@
+package main
+
+import (
+	"fmt"
+	"net"
+	"sync"
+	"time"
+
+	"github.com/tsmask/go-oam"
+
+	"github.com/tsmask/go-oam/src/framework/socket"
+)
+
+var wg sync.WaitGroup
+
+func main() {
+	// 开启OAM
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		o := oam.New(&oam.Opts{
+			Dev:      true,
+			ConfPath: "./local/oam.yaml",
+			License: &oam.License{
+				NeType:     "NE",
+				Version:    "1.0",
+				SerialNum:  "1234567890",
+				ExpiryDate: "2025-12-31",
+				Capability: 100,
+			},
+		})
+		if err := o.Run(); err != nil {
+			fmt.Printf("oam run fail: %s\n", err.Error())
+		}
+	}()
+
+	// 模拟telnet
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		TelnetServer()
+	}()
+
+	// 模拟服务
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		TestServer()
+	}()
+
+	wg.Wait()
+}
+
+// TestServer 模块
+func TestServer() {
+	fmt.Println("开始加载 ====> test 服务")
+
+	// 创建周期为5秒的定时器
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop() // 确保在函数退出时停止定时器
+
+	// 使用goroutine处理定时任务
+	for t := range ticker.C {
+		fmt.Println("test 服务", t.Format(time.RFC3339))
+	}
+}
+
+// TelnetServer 模块
+func TelnetServer() error {
+	fmt.Println("开始加载 ====> telnet 服务")
+
+	// 初始化TCP服务
+	tcpService := socket.SocketTCP{
+		Addr: "127.0.0.1",
+		Port: 4100,
+	}
+	if _, err := tcpService.New(); err != nil {
+		fmt.Printf("socket tcp init fail: %s\n", err.Error())
+		return err
+	}
+	// 接收处理TCP数据
+	tcpService.Resolve(func(conn *net.Conn, err error) {
+		if err != nil {
+			fmt.Printf("TCP Resolve %s\n", err.Error())
+			return
+		}
+		c := (*conn)
+
+		fmt.Println("[Telnet] TCP Accept from:", c.RemoteAddr().String())
+	})
+	return nil
+}

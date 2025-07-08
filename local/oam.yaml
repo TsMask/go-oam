@@ -1,0 +1,12 @@
+# OAM服务是否开启
+enable: true
+# 路由HTTP服务配置
+route:
+  - host: "0.0.0.0"
+    port: 29565
+    schema: http
+  - host: "0.0.0.0"
+    port: 29567
+    schema: https
+    cert: ./local/certs/www.omc.net.crt
+    key: ./local/certs/www.omc.net.key
