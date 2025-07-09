@@ -58,18 +58,20 @@ func (s *KPI) KPITimerStart(url string) {
 					dataMap[key.(string)] = value.(float64)
 					return true
 				})
-				// 执行 KPI 发送操作
-				k := model.KPI{
-					NeUid:       s.NeUid, // 网元唯一标识
-					Granularity: int64(s.Granularity.Seconds()),
-					RecordTime:  time.Now().UnixMilli(),
-					Data:        dataMap,
-				}
+				if len(dataMap) != 0 {
+					// 执行 KPI 发送操作
+					k := model.KPI{
+						NeUid:       s.NeUid, // 网元唯一标识
+						Granularity: int64(s.Granularity.Seconds()),
+						RecordTime:  time.Now().UnixMilli(),
+						Data:        dataMap,
+					}
 
-				// 记录历史
-				kpiHistorys = append(kpiHistorys, k)
-				// 发送
-				fetch.PostJSON(url, k, nil)
+					// 记录历史
+					kpiHistorys = append(kpiHistorys, k)
+					// 发送
+					fetch.PostJSON(url, k, nil)
+				}
 
 				// 清空 sync.Map
 				s.data = sync.Map{}
