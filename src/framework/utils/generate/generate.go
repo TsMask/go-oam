@@ -1,10 +1,9 @@
 package generate
 
 import (
-	"math/rand"
-	"time"
-
-	"github.com/tsmask/go-oam/src/framework/logger"
+	"fmt"
+	"strconv"
+	"strings"
 
 	gonanoid "github.com/matoous/go-nanoid/v2"
 )
@@ -15,7 +14,6 @@ import (
 func Code(size int) string {
 	str, err := gonanoid.Generate("0123456789abcdefghijklmnopqrstuvwxyz", size)
 	if err != nil {
-		logger.Infof("%d : %v", size, err)
 		return ""
 	}
 	return str
@@ -32,11 +30,32 @@ func String(size int) string {
 	return str
 }
 
-// 随机数 纯数字0-9
-func Number(size int) int {
-	source := rand.NewSource(time.Now().UnixNano())
-	random := rand.New(source)
-	min := int64(0)
-	max := int64(9 * int(size))
-	return int(random.Int63n(max-min+1) + min)
+// 生成随机整数值 size最大18
+func Number(size int) int64 {
+	// int64 最大值为 9223372036854775807，共 19 位
+	maxSize := 18
+	if size > maxSize {
+		size = maxSize
+	}
+
+	str, err := gonanoid.Generate("1234567890", size)
+	if err != nil {
+		return 0
+	}
+
+	// 位数不足时向后补 0
+	if len(str) < size {
+		str = fmt.Sprintf("%-*s", size, str)
+		str = str[:size] // 确保长度准确
+	}
+
+	if strings.HasPrefix(str, "0") {
+		str = strings.Replace(str, "0", "1", 1)
+	}
+
+	v, err := strconv.ParseInt(str, 10, 64)
+	if err != nil {
+		return 0
+	}
+	return v
 }
