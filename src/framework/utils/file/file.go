@@ -5,6 +5,7 @@ import (
 	"mime/multipart"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -13,7 +14,6 @@ import (
 	"github.com/tsmask/go-oam/src/framework/utils/date"
 	"github.com/tsmask/go-oam/src/framework/utils/generate"
 	"github.com/tsmask/go-oam/src/framework/utils/parse"
-	"github.com/tsmask/go-oam/src/framework/utils/regular"
 )
 
 /**最大文件名长度 */
@@ -56,11 +56,14 @@ func uploadWhiteList() []string {
 func generateFileName(fileName string) string {
 	fileExt := filepath.Ext(fileName)
 	// 去除后缀
-	newFileName := regular.Replace(fileName, fileExt, "")
+	regex := regexp.MustCompile(fileExt)
+	newFileName := regex.ReplaceAllString(fileName, "")
 	// 去除非法字符
-	newFileName = regular.Replace(newFileName, `[\\/:*?"<>|]`, "")
+	regex = regexp.MustCompile(`[\\/:*?"<>|]`)
+	newFileName = regex.ReplaceAllString(newFileName, "")
 	// 去除空格
-	newFileName = regular.Replace(newFileName, `\s`, "_")
+	regex = regexp.MustCompile(`\s`)
+	newFileName = regex.ReplaceAllString(newFileName, "_")
 	newFileName = strings.TrimSpace(newFileName)
 	return fmt.Sprintf("%s_%s%s", newFileName, generate.Code(6), fileExt)
 }

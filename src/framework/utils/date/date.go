@@ -2,8 +2,6 @@ package date
 
 import (
 	"time"
-
-	"github.com/tsmask/go-oam/src/framework/logger"
 )
 
 const (
@@ -35,7 +33,6 @@ func ParseStrToDate(dateStr, formatStr string) time.Time {
 	}
 	t, err := time.Parse(formatStr, dateStr)
 	if err != nil {
-		logger.Infof("utils ParseStrToDate err %v", err)
 		return time.Time{}
 	}
 	return t
@@ -59,13 +56,11 @@ func ParseDateToStr(date any, formatStr string) string {
 			} else if v > 999999999 {
 				t = time.Unix(v, 0)
 			} else {
-				logger.Infof("utils ParseDateToStr err %v", "Invalid timestamp")
 				return ""
 			}
 		case string:
 			parsedTime, err := time.Parse(formatStr, v)
 			if err != nil {
-				logger.Infof("utils ParseDateToStr err %v", err)
 				return ""
 			}
 			t = parsedTime
