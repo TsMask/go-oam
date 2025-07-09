@@ -61,14 +61,16 @@ func UENBHistoryList() []model.UENB {
 // UENBPushURL 终端接入基站推送 自定义URL地址接收
 func UENBPushURL(url string, uenb *model.UENB) error {
 	uenb.RecordTime = time.Now().UnixMilli()
+
+	// 记录历史
+	if uenbRecord {
+		uenbHistorys = append(uenbHistorys, *uenb)
+	}
+
 	// 发送
 	_, err := fetch.PostJSON(url, uenb, nil)
 	if err != nil {
 		return err
-	}
-	// 记录历史
-	if uenbRecord {
-		uenbHistorys = append(uenbHistorys, *uenb)
 	}
 	return nil
 }

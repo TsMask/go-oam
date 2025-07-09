@@ -55,14 +55,16 @@ func AlarmPushURL(url string, alarm *model.Alarm) error {
 	alarmSeq++
 	alarm.AlarmTime = time.Now().UnixMilli()
 	alarm.AlarmSeq = alarmSeq
+
+	// 记录历史
+	if alarmRecord {
+		alarmHistorys = append(alarmHistorys, *alarm)
+	}
+
 	// 发送
 	_, err := fetch.PostJSON(url, alarm, nil)
 	if err != nil {
 		return err
-	}
-	// 记录历史
-	if alarmRecord {
-		alarmHistorys = append(alarmHistorys, *alarm)
 	}
 	return nil
 }

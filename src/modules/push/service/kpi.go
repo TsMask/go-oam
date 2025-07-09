@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/tsmask/go-oam/src/framework/fetch"
-	"github.com/tsmask/go-oam/src/framework/logger"
 	"github.com/tsmask/go-oam/src/modules/push/model"
 )
 
@@ -67,13 +66,11 @@ func (s *KPI) KPITimerStart(url string) {
 					Data:        dataMap,
 				}
 
-				// 发送
-				_, err := fetch.PostJSON(url, k, nil)
-				if err != nil {
-					logger.Errorf("KPITimer PostJSON error: %v", err)
-				}
 				// 记录历史
 				kpiHistorys = append(kpiHistorys, k)
+				// 发送
+				fetch.PostJSON(url, k, nil)
+
 				// 清空 sync.Map
 				s.data = sync.Map{}
 				// 重置 KPI 定时器，按指定周期执行
@@ -148,13 +145,13 @@ func KPISend(url, neUid string, granularity int64, dataMap map[string]float64) e
 		NeUid:       neUid,
 	}
 
+	// 记录历史
+	kpiHistorys = append(kpiHistorys, k)
+
 	// 发送
 	_, err := fetch.PostJSON(url, k, nil)
 	if err != nil {
-		logger.Errorf("KPISend PostJSON error: %v", err)
 		return err
 	}
-	// 记录历史
-	kpiHistorys = append(kpiHistorys, k)
 	return nil
 }

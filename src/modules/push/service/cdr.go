@@ -61,14 +61,16 @@ func CDRHistoryList() []model.CDR {
 // CDRPushURL 话单推送 自定义URL地址接收
 func CDRPushURL(url string, cdr *model.CDR) error {
 	cdr.RecordTime = time.Now().UnixMilli()
+
+	// 记录历史
+	if cdrRecord {
+		cdrHistorys = append(cdrHistorys, *cdr)
+	}
+
 	// 发送
 	_, err := fetch.PostJSON(url, cdr, nil)
 	if err != nil {
 		return err
-	}
-	// 记录历史
-	if cdrRecord {
-		cdrHistorys = append(cdrHistorys, *cdr)
 	}
 	return nil
 }
