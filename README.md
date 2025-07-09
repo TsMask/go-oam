@@ -1,5 +1,10 @@
 # OAM SDK
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/olekukonko/tablewriter.svg)](https://pkg.go.dev/github.com/tsmask/go-oam)
+[![Go Report Card](https://goreportcard.com/badge/github.com/tsmask/go-oam)](https://goreportcard.com/report/github.com/tsmask/go-oam)
+[![License](https://img.shields.io/badge/license-AGPL3-blue.svg)](LICENSE)
+[![Tag](https://img.shields.io/badge/TAG-list-success)](https://proxy.golang.org/github.com/tsmask/go-oam/@v/list)
+
 ## 简介
 
 OAM SDK 是一个用于网元与 OMC 服务进行交互的 SDK
