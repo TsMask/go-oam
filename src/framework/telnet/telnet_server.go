@@ -1,4 +1,4 @@
-package socket
+package telnet
 
 import (
 	"fmt"
@@ -6,21 +6,20 @@ import (
 	"strings"
 )
 
-// ServerTCP TCP服务端
-type ServerTCP struct {
-	Addr     string           `json:"addr"` // 主机地址
-	Port     string           `json:"port"` // 端口
+// Server 服务参数
+type Server struct {
+	Addr     string           `json:"addr"` // telnet地址
+	Port     string           `json:"port"` // telnet端口
 	listener *net.TCPListener // 监听服务
 	stopChan chan struct{}    // 停止信号
 }
 
-// Listen 创建TCP服务端
-func (s *ServerTCP) Listen() error {
+// New 服务创建监听
+func (s *Server) Listen() error {
 	// IPV6地址协议
 	proto := "tcp"
 	if strings.Contains(s.Addr, ":") {
 		proto = "tcp6"
-		s.Addr = fmt.Sprintf("[%s]", s.Addr)
 	}
 	address := net.JoinHostPort(s.Addr, s.Port)
 
@@ -41,8 +40,8 @@ func (s *ServerTCP) Listen() error {
 	return nil
 }
 
-// Close 关闭当前TCP服务端
-func (s *ServerTCP) Close() {
+// Close 关闭当前服务
+func (s *Server) Close() {
 	if s.listener != nil {
 		s.stopChan <- struct{}{}
 		s.listener.Close()
@@ -50,25 +49,25 @@ func (s *ServerTCP) Close() {
 }
 
 // Resolve 处理消息
-func (s *ServerTCP) Resolve(callback func(conn net.Conn, err error)) {
-	if s.listener == nil {
-		callback(nil, fmt.Errorf("tcp service not created"))
+func (t *Server) Resolve(callback func(conn net.Conn, err error)) {
+	if t.listener == nil {
+		callback(nil, fmt.Errorf("telnet service not created"))
 		return
 	}
 
 	defer func() {
 		if err := recover(); err != nil {
-			callback(nil, fmt.Errorf("tcp service panic err"))
+			callback(nil, fmt.Errorf("telnet service panic err"))
 		}
 	}()
 
 	for {
 		select {
-		case <-s.stopChan:
-			callback(nil, fmt.Errorf("tcp service stop"))
+		case <-t.stopChan:
+			callback(nil, fmt.Errorf("telnet service stop"))
 			return
 		default:
-			conn, err := s.listener.Accept()
+			conn, err := t.listener.Accept()
 			if err != nil {
 				continue
 			}

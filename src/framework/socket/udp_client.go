@@ -8,26 +8,23 @@ import (
 	"time"
 )
 
-// ConnUDP 连接UDP客户端
-type ConnUDP struct {
-	Addr string `json:"addr"` // 主机地址
-	Port int64  `json:"port"` // 端口
-
-	DialTimeOut time.Duration `json:"dialTimeOut"` // 连接超时断开
-
-	Client     *net.Conn `json:"client"`
-	LastResult string    `json:"lastResult"` // 记最后一次发送消息的结果
+// ClientUDP 连接UDP客户端
+type ClientUDP struct {
+	Addr        string        `json:"addr"` // 主机地址
+	Port        string        `json:"port"` // 端口
+	DialTimeOut time.Duration // 连接超时断开, 默认5秒
+	conn        net.Conn      // 客户端
 }
 
-// New 创建UDP客户端
-func (c *ConnUDP) New() (*ConnUDP, error) {
+// Connect 连接UDP客户端
+func (c *ClientUDP) Connect() error {
 	// IPV6地址协议
 	proto := "udp"
 	if strings.Contains(c.Addr, ":") {
 		proto = "udp6"
 		c.Addr = fmt.Sprintf("[%s]", c.Addr)
 	}
-	address := net.JoinHostPort(c.Addr, fmt.Sprint(c.Port))
+	address := net.JoinHostPort(c.Addr, c.Port)
 
 	// 默认等待5s
 	if c.DialTimeOut == 0 {
@@ -35,32 +32,31 @@ func (c *ConnUDP) New() (*ConnUDP, error) {
 	}
 
 	// 连接到服务端
-	client, err := net.DialTimeout(proto, address, c.DialTimeOut)
+	conn, err := net.DialTimeout(proto, address, c.DialTimeOut)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	c.Client = &client
-	return c, nil
+	c.conn = conn
+	return nil
 }
 
 // Close 关闭当前UDP客户端
-func (c *ConnUDP) Close() {
-	if c.Client != nil {
-		(*c.Client).Close()
+func (c *ClientUDP) Close() {
+	if c.conn != nil {
+		c.conn.Close()
 	}
 }
 
 // Send 发送消息
-func (c *ConnUDP) Send(msg []byte, ms int) (string, error) {
-	if c.Client == nil {
+func (c *ClientUDP) Send(msg []byte, timeout time.Duration) (string, error) {
+	if c.conn == nil {
 		return "", fmt.Errorf("udp client not connected")
 	}
-	conn := *c.Client
 
 	// 写入信息
 	if len(msg) > 0 {
-		if _, err := conn.Write(msg); err != nil {
+		if _, err := c.conn.Write(msg); err != nil {
 			return "", err
 		}
 	}
@@ -71,25 +67,26 @@ func (c *ConnUDP) Send(msg []byte, ms int) (string, error) {
 	tmp := make([]byte, 1024)
 	for {
 		select {
-		case <-time.After(time.Duration(time.Duration(ms).Milliseconds())):
-			c.LastResult = buf.String()
-			return c.LastResult, fmt.Errorf("timeout")
+		case <-time.After(timeout):
+			return buf.String(), fmt.Errorf("timeout")
 		default:
 			// 读取命令消息
-			n, err := conn.Read(tmp)
+			n, err := c.conn.Read(tmp)
 			if n == 0 || err != nil {
 				tmp = nil
 				break
 			}
 
+			buf.Write(tmp[:n])
 			tmpStr := string(tmp[:n])
-			buf.WriteString(tmpStr)
 
 			// 是否有终止符
-			if strings.HasSuffix(tmpStr, ">") || strings.HasSuffix(tmpStr, "> ") || strings.HasSuffix(tmpStr, "# ") {
-				tmp = nil
-				c.LastResult = buf.String()
-				return c.LastResult, nil
+			arr := []string{">", "#", "# ", "> "}
+			for _, v := range arr {
+				if strings.HasSuffix(tmpStr, v) {
+					tmp = nil
+					return buf.String(), nil
+				}
 			}
 		}
 	}
