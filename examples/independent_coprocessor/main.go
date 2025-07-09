@@ -8,7 +8,7 @@ import (
 
 	"github.com/tsmask/go-oam"
 
-	"github.com/tsmask/go-oam/src/framework/socket"
+	"github.com/tsmask/go-oam/src/framework/telnet"
 )
 
 var wg sync.WaitGroup
@@ -70,24 +70,23 @@ func TestServer() {
 func TelnetServer() error {
 	fmt.Println("开始加载 ====> telnet 服务")
 
-	// 初始化TCP服务
-	tcpService := socket.SocketTCP{
+	// 初始化服务
+	telnetService := telnet.Server{
 		Addr: "127.0.0.1",
-		Port: 4100,
+		Port: "4100",
 	}
-	if err := tcpService.New(); err != nil {
+	if err := telnetService.Listen(); err != nil {
 		fmt.Printf("socket tcp init fail: %s\n", err.Error())
 		return err
 	}
 	// 接收处理TCP数据
-	tcpService.Resolve(func(conn *net.Conn, err error) {
+	telnetService.Resolve(func(conn net.Conn, err error) {
 		if err != nil {
 			fmt.Printf("TCP Resolve %s\n", err.Error())
 			return
 		}
-		c := (*conn)
-
-		fmt.Println("[Telnet] TCP Accept from:", c.RemoteAddr().String())
+		fmt.Println("[Telnet] TCP Accept from:", conn.RemoteAddr().String())
+		conn.Write([]byte("hello world"))
 	})
 	return nil
 }
