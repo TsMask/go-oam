@@ -51,9 +51,9 @@ func ParseDateToStr(date any, formatStr string) string {
 			if v == 0 {
 				return ""
 			}
-			if v > 9999999999 {
+			if v > 1e13 {
 				t = time.UnixMilli(v)
-			} else if v > 999999999 {
+			} else if v > 1e10 {
 				t = time.Unix(v, 0)
 			} else {
 				return ""

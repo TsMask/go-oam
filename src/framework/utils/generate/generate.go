@@ -16,6 +16,10 @@ func Code(size int) string {
 	if err != nil {
 		return ""
 	}
+	// 位数不足时向后补 e，直至达到指定长度
+	for len(str) < size {
+		str += "e"
+	}
 	return str
 }
 
@@ -26,6 +30,10 @@ func String(size int) string {
 	str, err := gonanoid.New(size)
 	if err != nil {
 		return ""
+	}
+	// 位数不足时向后补 e，直至达到指定长度
+	for len(str) < size {
+		str += "e"
 	}
 	return str
 }
