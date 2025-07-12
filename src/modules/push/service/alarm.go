@@ -10,9 +10,6 @@ import (
 // ALARM_PUSH_URI 告警推送URI地址 POST
 const ALARM_PUSH_URI = "/push/alarm/receive"
 
-// 告警序号 每次发送时进行累加，0点重新记录
-var alarmSeq int64 = 0
-
 // alarmRecord 控制是否记录历史告警
 var alarmRecord bool = false
 
@@ -52,9 +49,7 @@ func AlarmHistoryList() []model.Alarm {
 
 // AlarmPushURL 告警推送 自定义URL地址接收
 func AlarmPushURL(url string, alarm *model.Alarm) error {
-	alarmSeq++
 	alarm.AlarmTime = time.Now().UnixMilli()
-	alarm.AlarmSeq = alarmSeq
 
 	// 记录历史
 	if alarmRecord {

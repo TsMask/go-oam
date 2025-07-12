@@ -11,24 +11,24 @@ import (
 )
 
 const (
-	AlarmTypeCommunicationAlarm    = "CommunicationAlarm"    // 告警类型-通信警报
-	AlarmTypeEquipmentAlarm        = "EquipmentAlarm"        // 告警类型-设备警报
-	AlarmTypeProcessingFailure     = "ProcessingFailure"     // 告警类型-处理故障
-	AlarmTypeEnvironmentalAlarm    = "EnvironmentalAlarm"    // 告警类型-环境警报
-	AlarmTypeQualityOfServiceAlarm = "QualityOfServiceAlarm" // 告警类型-服务质量警报
+	ALARM_TYPE_COMMUNICATION_ALARM      = "CommunicationAlarm"    // 告警类型-通信警报
+	ALARM_TYPE_EQUIPMENT_ALARM          = "EquipmentAlarm"        // 告警类型-设备警报
+	ALARM_TYPE_PROCESSING_FAILURE       = "ProcessingFailure"     // 告警类型-处理故障
+	ALARM_TYPE_ENVIRONMENTAL_ALARM      = "EnvironmentalAlarm"    // 告警类型-环境警报
+	ALARM_TYPE_QUALITY_OF_SERVICE_ALARM = "QualityOfServiceAlarm" // 告警类型-服务质量警报
 )
 
 const (
-	AlarmSeverityCritical = "Critical" // 告警级别-危急
-	AlarmSeverityMajor    = "Major"    // 告警级别-主要
-	AlarmSeverityMinor    = "Minor"    // 告警级别-次要
-	AlarmSeverityWarning  = "Warning"  // 告警级别-警告
-	AlarmSeverityEvent    = "Event"    // 告警级别-事件
+	ALARM_SEVERITY_CRITICAL = "Critical" // 告警级别-危急
+	ALARM_SEVERITY_MAJOR    = "Major"    // 告警级别-主要
+	ALARM_SEVERITY_MINOR    = "Minor"    // 告警级别-次要
+	ALARM_SEVERITY_WARNING  = "Warning"  // 告警级别-警告
+	ALARM_SEVERITY_EVENT    = "Event"    // 告警级别-事件
 )
 
 const (
-	AlarmStatusClear  = "Clear"  // 告警状态-清除
-	AlarmStatusActive = "Active" // 告警状态-活动
+	ALARM_STATUS_CLEAR  = "Clear"  // 告警状态-清除
+	ALARM_STATUS_ACTIVE = "Active" // 告警状态-活动
 )
 
 type Alarm = model.Alarm
@@ -46,7 +46,7 @@ func AlarmHistoryClearTimer() {
 
 // AlarmReceiveRoute 告警接收路由装载
 // 接收端实现
-func AlarmReceiveRoute(router gin.IRouter, onReceive func(Alarm)) {
+func AlarmReceiveRoute(router gin.IRouter, onReceive func(Alarm) error) {
 	router.POST(service.ALARM_PUSH_URI, func(c *gin.Context) {
 		var body Alarm
 		if err := c.ShouldBindBodyWithJSON(&body); err != nil {
@@ -54,7 +54,10 @@ func AlarmReceiveRoute(router gin.IRouter, onReceive func(Alarm)) {
 			c.JSON(422, resp.CodeMsg(resp.CODE_PARAM_PARSER, errMsgs))
 			return
 		}
-		onReceive(body)
+		if err := onReceive(body); err != nil {
+			c.JSON(200, resp.ErrMsg(err.Error()))
+			return
+		}
 		c.JSON(200, resp.Ok(nil))
 	})
 }

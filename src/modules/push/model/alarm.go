@@ -1,30 +1,29 @@
 package model
 
 const (
-	AlarmTypeCommunicationAlarm    = "CommunicationAlarm"    // 告警类型-通信警报
-	AlarmTypeEquipmentAlarm        = "EquipmentAlarm"        // 告警类型-设备警报
-	AlarmTypeProcessingFailure     = "ProcessingFailure"     // 告警类型-处理故障
-	AlarmTypeEnvironmentalAlarm    = "EnvironmentalAlarm"    // 告警类型-环境警报
-	AlarmTypeQualityOfServiceAlarm = "QualityOfServiceAlarm" // 告警类型-服务质量警报
+	ALARM_TYPE_COMMUNICATION_ALARM      = "CommunicationAlarm"    // 告警类型-通信警报
+	ALARM_TYPE_EQUIPMENT_ALARM          = "EquipmentAlarm"        // 告警类型-设备警报
+	ALARM_TYPE_PROCESSING_FAILURE       = "ProcessingFailure"     // 告警类型-处理故障
+	ALARM_TYPE_ENVIRONMENTAL_ALARM      = "EnvironmentalAlarm"    // 告警类型-环境警报
+	ALARM_TYPE_QUALITY_OF_SERVICE_ALARM = "QualityOfServiceAlarm" // 告警类型-服务质量警报
 )
 
 const (
-	AlarmSeverityCritical = "Critical" // 告警级别-危急
-	AlarmSeverityMajor    = "Major"    // 告警级别-主要
-	AlarmSeverityMinor    = "Minor"    // 告警级别-次要
-	AlarmSeverityWarning  = "Warning"  // 告警级别-警告
-	AlarmSeverityEvent    = "Event"    // 告警级别-事件
+	ALARM_SEVERITY_CRITICAL = "Critical" // 告警级别-危急
+	ALARM_SEVERITY_MAJOR    = "Major"    // 告警级别-主要
+	ALARM_SEVERITY_MINOR    = "Minor"    // 告警级别-次要
+	ALARM_SEVERITY_WARNING  = "Warning"  // 告警级别-警告
+	ALARM_SEVERITY_EVENT    = "Event"    // 告警级别-事件
 )
 
 const (
-	AlarmStatusClear  = "Clear"  // 告警状态-清除
-	AlarmStatusActive = "Active" // 告警状态-活动
+	ALARM_STATUS_CLEAR  = "Clear"  // 告警状态-清除
+	ALARM_STATUS_ACTIVE = "Active" // 告警状态-活动
 )
 
 // Alarm 告警信息对象
 type Alarm struct {
 	NeUid             string `json:"neUid" binding:"required"`             // 网元唯一标识
-	AlarmSeq          int64  `json:"alarmSeq" binding:"required"`          // 告警序号 连续递增，Push自动填充
 	AlarmTime         int64  `json:"alarmTime" binding:"required"`         // 事件产生时间 时间戳毫秒，Push自动填充
 	AlarmId           string `json:"alarmId" binding:"required"`           // 告警ID 唯一，清除时对应
 	AlarmCode         int    `json:"alarmCode" binding:"required"`         // 告警状态码
