@@ -71,7 +71,7 @@ func KPIHistoryList() []KPI {
 
 // KPIReceiveRoute 告警接收路由装载
 // 接收端实现
-func KPIReceiveRoute(router gin.IRouter, onReceive func(KPI)) {
+func KPIReceiveRoute(router gin.IRouter, onReceive func(KPI) error) {
 	router.POST(service.KPI_PUSH_URI, func(c *gin.Context) {
 		var body KPI
 		if err := c.ShouldBindBodyWithJSON(&body); err != nil {
@@ -79,7 +79,10 @@ func KPIReceiveRoute(router gin.IRouter, onReceive func(KPI)) {
 			c.JSON(422, resp.CodeMsg(resp.CODE_PARAM_PARSER, errMsgs))
 			return
 		}
-		onReceive(body)
+		if err := onReceive(body); err != nil {
+			c.JSON(200, resp.ErrMsg(err.Error()))
+			return
+		}
 		c.JSON(200, resp.Ok(nil))
 	})
 }

@@ -25,7 +25,7 @@ func CDRHistoryClearTimer() {
 
 // CDRReceiveRoute 话单接收路由装载
 // 接收端实现
-func CDRReceiveRoute(router gin.IRouter, onReceive func(CDR)) {
+func CDRReceiveRoute(router gin.IRouter, onReceive func(CDR) error) {
 	router.POST(service.CDR_PUSH_URI, func(c *gin.Context) {
 		var body CDR
 		if err := c.ShouldBindBodyWithJSON(&body); err != nil {
@@ -33,7 +33,10 @@ func CDRReceiveRoute(router gin.IRouter, onReceive func(CDR)) {
 			c.JSON(422, resp.CodeMsg(resp.CODE_PARAM_PARSER, errMsgs))
 			return
 		}
-		onReceive(body)
+		if err := onReceive(body); err != nil {
+			c.JSON(200, resp.ErrMsg(err.Error()))
+			return
+		}
 		c.JSON(200, resp.Ok(nil))
 	})
 }
