@@ -27,7 +27,7 @@ type RedisController struct {
 
 // Redis 命令执行
 //
-// GET /command
+// POST /command
 //
 //	@Tags			tool/Redis
 //	@Accept			json
@@ -37,7 +37,7 @@ type RedisController struct {
 //	@Security		TokenAuth
 //	@Summary		Redis run
 //	@Description	Redis run
-//	@Router			/tool/redis/command [get]
+//	@Router			/tool/redis/command [post]
 func (s RedisController) Command(c *gin.Context) {
 	var body struct {
 		Command string `form:"command" binding:"required"` // 命令

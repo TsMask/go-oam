@@ -31,7 +31,7 @@ type SSHController struct {
 
 // SSH 命令执行
 //
-// GET /command
+// POST /command
 //
 //	@Tags			tool/SSH
 //	@Accept			json
@@ -41,7 +41,7 @@ type SSHController struct {
 //	@Security		TokenAuth
 //	@Summary		SSH run
 //	@Description	SSH run
-//	@Router			/tool/ssh/command [get]
+//	@Router			/tool/ssh/command [post]
 func (s SSHController) Command(c *gin.Context) {
 	var body struct {
 		Command string `form:"command" binding:"required"` // 命令

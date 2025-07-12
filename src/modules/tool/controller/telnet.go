@@ -27,7 +27,7 @@ type TelnetController struct {
 
 // Telnet 命令执行
 //
-// GET /command
+// POST /command
 //
 //	@Tags			tool/telnet
 //	@Accept			json
@@ -37,7 +37,7 @@ type TelnetController struct {
 //	@Security		TokenAuth
 //	@Summary		Telnet run
 //	@Description	Telnet run
-//	@Router			/tool/telnet/command [get]
+//	@Router			/tool/telnet/command [post]
 func (s TelnetController) Command(c *gin.Context) {
 	var body struct {
 		Command string `form:"command" binding:"required"` // 命令

@@ -27,7 +27,7 @@ type SNMPController struct {
 
 // SNMP 命令执行
 //
-// GET /command
+// POST /command
 //
 //	@Tags			tool/SNMP
 //	@Accept			json
@@ -37,7 +37,7 @@ type SNMPController struct {
 //	@Security		TokenAuth
 //	@Summary		SNMP run
 //	@Description	SNMP run
-//	@Router			/tool/SNMP/command [get]
+//	@Router			/tool/SNMP/command [post]
 func (s SNMPController) Command(c *gin.Context) {
 	var body struct {
 		Command string `form:"command" binding:"required"` // 命令
