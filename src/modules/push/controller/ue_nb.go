@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/tsmask/go-oam/src/framework/route/resp"
+	"github.com/tsmask/go-oam/src/framework/utils/generate"
 	"github.com/tsmask/go-oam/src/modules/push/model"
 	"github.com/tsmask/go-oam/src/modules/push/service"
 )
@@ -59,13 +60,13 @@ func (s UENBController) Test(c *gin.Context) {
 	}
 
 	uenb := model.UENB{
-		NeUid:  query.NeUID,                 // 网元唯一标识
-		NBId:   "257",                       // 基站ID
-		CellId: "1",                         // 小区ID
-		TAC:    "4388",                      // TAC
-		IMSI:   "460991100000000",           // IMSI
-		Result: model.UENBResultAuthSuccess, // 结果值
-		Type:   model.UENBTypeAuth,          // 终端接入基站类型
+		NeUid:  query.NeUID,                                    // 网元唯一标识
+		NBId:   fmt.Sprint(generate.Number(2)),                 // 基站ID
+		CellId: "1",                                            // 小区ID
+		TAC:    "4388",                                         // TAC
+		IMSI:   fmt.Sprintf("460991100%d", generate.Number(6)), // IMSI
+		Result: model.UENB_RESULT_AUTH_SUCCESS,                 // 结果值
+		Type:   model.UENB_TYPE_AUTH,                           // 终端接入基站类型
 	}
 	err := service.UENBPushURL(query.Url, &uenb)
 	if err != nil {
