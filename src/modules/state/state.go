@@ -18,4 +18,6 @@ func SetupRoute(router gin.IRouter) {
 
 	// 系统状态
 	router.GET("/state/system", controller.NewSystem.Handler)
+	// 机器资源状态
+	router.GET("/state/monitor", controller.NewMonitor.Handler)
 }
