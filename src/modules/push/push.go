@@ -50,4 +50,12 @@ func SetupRoute(router gin.IRouter) {
 		cdrGroup.GET("/history", cdr.History)
 		cdrGroup.GET("/test", cdr.Test)
 	}
+
+	// 通用路由
+	common := controller.NewCommon
+	commonGroup := router.Group("/push/common")
+	{
+		commonGroup.GET("/history", common.History)
+		commonGroup.GET("/test", common.Test)
+	}
 }

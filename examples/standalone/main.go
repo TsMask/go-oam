@@ -30,6 +30,22 @@ func main() {
 		for {
 			t := <-timer.C
 
+			// 发话单
+			common := oam.Common{
+				NeUid: "neUid", // 网元唯一标识
+				Type:  "common",
+				Data: map[string]any{
+					"commonSecond": t.Second(),
+					"commonTime":   t.UnixMilli(),
+				},
+			}
+			commonErr := oam.CommonPush("http", "192.168.5.58:29565", &common)
+			if commonErr != nil {
+				fmt.Println("==> Send err Common:", commonErr.Error())
+			} else {
+				fmt.Println("==> Send ok Common:", common.RecordTime)
+			}
+
 			// 发告警
 			alarmId := fmt.Sprintf("100_%d", t.UnixMilli())
 			alarm := oam.Alarm{
@@ -114,6 +130,8 @@ func main() {
 		}
 	}()
 
+	// 通用历史清除
+	oam.CommonHistoryClearTimer("test", 60*time.Minute)
 	// 告警历史清除
 	oam.AlarmHistoryClearTimer()
 	// UENB 终端接入基站历史清除
@@ -124,6 +142,11 @@ func main() {
 	oam.CDRHistoryClearTimer()
 
 	o.RouteAdd(func(r gin.IRouter) {
+		// 网管接收端收通用
+		oam.CommonReceiveRoute(r, func(common oam.Common) error {
+			fmt.Println("<== Receive Common", common)
+			return nil
+		})
 		// 网管接收端收告警
 		oam.AlarmReceiveRoute(r, func(alarm oam.Alarm) error {
 			fmt.Println("<== Receive Alarm", alarm)
