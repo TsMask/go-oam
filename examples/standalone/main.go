@@ -69,6 +69,23 @@ func main() {
 				fmt.Println("==> Send ok UENBTime:", uenb.RecordTime)
 			}
 
+			// 发基站状态
+			nbState := oam.NBState{
+				NeUid:      "neUid",                // 网元唯一标识
+				Address:    "192.168.101.112",      // 基站地址
+				DeviceName: "TestNB",               // 基站设备名称
+				State:      oam.NB_STATE_OFF,       // 基站状态 ON/OFF
+				StateTime:  time.Now().UnixMilli(), // 基站状态时间
+				Name:       "TestName",             // 基站名称 网元标记
+				Position:   "TestPosition",         // 基站位置 网元标记
+			}
+			errs = oam.NBStatePush("http", "192.168.5.58:29565", &nbState)
+			if errs != nil {
+				fmt.Println("==> Send err NBStateTime:", errs.Error())
+			} else {
+				fmt.Println("==> Send ok NBStateTime:", nbState.RecordTime)
+			}
+
 			// 发话单
 			cdr := oam.CDR{
 				NeUid: "neUid", // 网元唯一标识
@@ -101,6 +118,8 @@ func main() {
 	oam.AlarmHistoryClearTimer()
 	// UENB 终端接入基站历史清除
 	oam.UENBHistoryClearTimer()
+	// NBState 基站状态历史清除
+	oam.NBStateHistoryClearTimer()
 	// 话单历史清除
 	oam.CDRHistoryClearTimer()
 
@@ -113,6 +132,11 @@ func main() {
 		// 网管接收端收终端接入基站
 		oam.UENBReceiveRoute(r, func(uenb oam.UENB) error {
 			fmt.Println("<== Receive UENB", uenb)
+			return nil
+		})
+		// 网管接收端收基站状态
+		oam.NBStateReceiveRoute(r, func(nbState oam.NBState) error {
+			fmt.Println("<== Receive NBState", nbState)
 			return nil
 		})
 		// 网管接收端收话单

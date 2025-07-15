@@ -27,6 +27,14 @@ func SetupRoute(router gin.IRouter) {
 		kpiGroup.GET("/test", kpi.Test)
 	}
 
+	// NBState 基站状态路由
+	nbState := controller.NewNBState
+	nbStateGroup := router.Group("/push/nb/state")
+	{
+		nbStateGroup.GET("/history", nbState.History)
+		nbStateGroup.GET("/test", nbState.Test)
+	}
+
 	// UENB 终端接入基站路由
 	uenb := controller.NewUENB
 	uenbGroup := router.Group("/push/ue/nb")
