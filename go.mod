@@ -5,12 +5,12 @@ go 1.24
 require (
 	github.com/creack/pty v1.1.24
 	github.com/gin-gonic/gin v1.10.1
+	github.com/gorilla/websocket v1.5.3
 	github.com/matoous/go-nanoid/v2 v2.1.0
 	github.com/prometheus-community/pro-bing v0.7.0
 	github.com/redis/go-redis/v9 v9.11.0
 	github.com/shirou/gopsutil/v4 v4.25.6
 	github.com/spf13/viper v1.20.1
-	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -31,7 +31,6 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
 	github.com/goccy/go-json v0.10.2 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/gorilla/websocket v1.5.3
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.7 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
@@ -59,6 +58,7 @@ require (
 	golang.org/x/net v0.38.0 // indirect
 	golang.org/x/sync v0.14.0 // indirect
 	golang.org/x/sys v0.31.0 // indirect
-	golang.org/x/text v0.25.0
+	golang.org/x/text v0.23.0 // indirect
 	google.golang.org/protobuf v1.36.1 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

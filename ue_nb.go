@@ -33,7 +33,7 @@ const (
 type UENB = model.UENB
 
 // UENBHistoryList 终端接入基站历史列表
-// 需要先调用 AlarmHistoryClearTimer 才会开启记录
+// 需要先调用 UENBHistoryClearTimer 才会开启记录
 func UENBHistoryList() []UENB {
 	return service.UENBHistoryList()
 }

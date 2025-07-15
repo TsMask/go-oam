@@ -39,11 +39,6 @@ const (
 	CODE_ERROR = 400001
 	// MSG_ERROR 响应-msg错误失败
 	MSG_ERROR = "error"
-
-	// CODE_RATELIMIT 响应-code错误失败
-	CODE_RATELIMIT = 400002
-	// MSG_RATELIMIT 响应-msg错误失败
-	MSG_RATELIMIT = "access too often, please try again later"
 )
 
 // ====== 401 ======
@@ -53,20 +48,6 @@ const (
 
 	// CODE_AUTH_INVALID 响应-code无效身份信息
 	CODE_AUTH_INVALID = 401002
-
-	// CODE_AUTH_NOTOKEN 响应-code令牌字符为空
-	CODE_AUTH_NOTOKEN = 401003
-
-	// CODE_AUTH_DEVICE 响应-code设备指纹信息不匹配
-	CODE_AUTH_DEVICE = 401004
-	// MSG_AUTH_DEVICE 响应-msg设备指纹信息不匹配
-	MSG_AUTH_DEVICE = "device fingerprint mismatch"
-)
-
-// ====== 403 ======
-const (
-	// CODE_PERMISSION 响应-code权限未分配
-	CODE_PERMISSION = 403001
 )
 
 // ====== 422 ======

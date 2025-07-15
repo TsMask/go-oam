@@ -1,16 +1,11 @@
 package parse
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
-
-	"gopkg.in/yaml.v3"
 )
 
 // Number 解析数值型
@@ -173,63 +168,4 @@ func ConvertIPMask(bits int64) string {
 
 	// 将分组用点号连接起来形成掩码字符串
 	return strings.Join(groups, ".")
-}
-
-// ConvertConfigToMap 将配置内容转换为Map结构数据
-//
-// configType 类型支持：txt json yaml yml
-func ConvertConfigToMap(configType, content string) (map[string]any, error) {
-	// 类型支持：viper.SupportedExts
-	// config := viper.New()
-	// config.SetConfigType(configType)
-	// err := config.ReadConfig(bytes.NewBuffer([]byte(content)))
-	// return config.AllSettings(), err
-
-	var configMap map[string]interface{}
-	var err error
-	if configType == "" || configType == "txt" {
-		configMap = map[string]interface{}{
-			"txt": content,
-		}
-	}
-	if configType == "yaml" || configType == "yml" {
-		err = yaml.Unmarshal([]byte(content), &configMap)
-	}
-	if configType == "json" {
-		err = json.Unmarshal([]byte(content), &configMap)
-	}
-	return configMap, err
-}
-
-// ConvertConfigToFile 将数据写入到指定文件内
-//
-// configType 类型支持：txt json yaml yml
-func ConvertConfigToFile(configType, filePath string, data any) error {
-	// viper.SupportedExts
-	// config := viper.New()
-	// config.SetConfigType(configType)
-	// for key, value := range mapData {
-	// 	config.Set(key, value)
-	// }
-	// return config.WriteConfigAs(filePath)
-
-	var dataByte []byte
-	var err error
-	if configType == "" || configType == "txt" {
-		dataByte = []byte(data.(string))
-	}
-	if configType == "yaml" || configType == "yml" {
-		dataByte, err = yaml.Marshal(data)
-	}
-	if configType == "json" {
-		dataByte, err = json.Marshal(data)
-	}
-	if err != nil {
-		return err
-	}
-
-	if err := os.MkdirAll(filepath.Dir(filePath), 0775); err != nil {
-		return err
-	}
-	return os.WriteFile(filePath, dataByte, 0644)
 }
