@@ -35,7 +35,7 @@ func (s *ClientSession) WindowChange(h, w int) error {
 	return nil
 }
 
-// Write 写入命令 不带回车(\n)也会执行根据客户端情况
+// Write 写入命令 根据客户端情况不带回车(\n)也会执行
 func (s *ClientSession) Write(cmd string) (int, error) {
 	if s.conn == nil {
 		return 0, fmt.Errorf("client is nil to content write failed")

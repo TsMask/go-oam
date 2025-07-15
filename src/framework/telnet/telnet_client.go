@@ -54,14 +54,25 @@ func (c *Client) Connect() error {
 	return nil
 }
 
-// Close 关闭当前客户
+// Close 关闭当前客户端
 func (c *Client) Close() {
 	if c.conn != nil {
 		c.conn.Close()
 	}
 }
 
-// RunCMD 执行单次命令
+// WindowChange informs the remote host about a terminal window dimension change to h rows and w columns.
+func (c *Client) WindowChange(h, w int) error {
+	if c.conn == nil {
+		return fmt.Errorf("telnet client not connected")
+	}
+	// 需要确保接收方理解并正确处理发送窗口大小设置命令
+	c.conn.Write([]byte{255, 251, 31})
+	c.conn.Write([]byte{255, 250, 31, byte(w >> 8), byte(w & 0xFF), byte(h >> 8), byte(h & 0xFF), 255, 240})
+	return nil
+}
+
+// RunCMD 执行单次命令，根据终止符停止 ">", "#", "# ", "> "
 func (c *Client) RunCMD(cmd string) (string, error) {
 	if c.conn == nil {
 		return "", fmt.Errorf("telnet client not connected")
