@@ -25,25 +25,16 @@ func InitConfig() {
 
 // RunTime 程序开始运行的时间
 func RunTime() time.Time {
-	if conf == nil {
-		return time.Time{}
-	}
 	return conf.GetTime("runTime")
 }
 
 // Enable 是否开启OAM
 func Enable() bool {
-	if conf == nil {
-		return false
-	}
 	return conf.GetBool("enable")
 }
 
 // Dev 运行模式
 func Dev() bool {
-	if conf == nil {
-		return false
-	}
 	return conf.GetBool("dev")
 }
 
@@ -83,18 +74,16 @@ func initViper() {
 //
 // Get("ne.version")
 func Get(key string) any {
-	if conf == nil {
+	v := conf.Get(key)
+	if v == nil {
 		return ""
 	}
-	return conf.Get(key)
+	return v
 }
 
 // Set 修改配置信息
 //
 // Set("ne.version")
 func Set(key string, value any) {
-	if conf == nil {
-		return
-	}
 	conf.Set(key, value)
 }

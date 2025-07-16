@@ -2,8 +2,8 @@ package route
 
 import (
 	"fmt"
-	"net"
 	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -11,7 +11,6 @@ import (
 	"github.com/tsmask/go-oam/src/framework/logger"
 	"github.com/tsmask/go-oam/src/framework/route/middleware"
 	"github.com/tsmask/go-oam/src/framework/route/middleware/security"
-	"github.com/tsmask/go-oam/src/framework/utils/parse"
 )
 
 // Engine 初始HTTP路由引擎
@@ -51,15 +50,13 @@ func Engine(dev bool) *gin.Engine {
 func Run(router *gin.Engine) error {
 	// 开启HTTP服务
 	var wg sync.WaitGroup
-	httpArr := config.Get("route")
-	if httpArr == nil {
+	routeArr := config.Get("route")
+	if routeArr == nil {
 		return fmt.Errorf("route config not found")
 	}
-	for _, v := range httpArr.([]any) {
+	for _, v := range routeArr.([]any) {
 		item := v.(map[string]any)
-		host := fmt.Sprint(item["host"])
-		port := parse.Number(item["port"])
-		address := net.JoinHostPort(host, fmt.Sprint(port))
+		address := fmt.Sprint(item["addr"])
 		schema := fmt.Sprint(item["schema"])
 		if schema == "https" && schema != "<nil>" {
 			certFile := fmt.Sprint(item["cert"])
@@ -68,16 +65,26 @@ func Run(router *gin.Engine) error {
 			wg.Add(1)
 			go func(addr string, certFile string, keyFile string) {
 				defer wg.Done()
-				err := router.RunTLS(addr, certFile, keyFile)
-				logger.Errorf("route RunTLS err:%v", err)
+				for i := range 10 {
+					if err := router.RunTLS(addr, certFile, keyFile); err != nil {
+						logger.Errorf("route run tls err:%v", err)
+						time.Sleep(10 * time.Second) // 重试间隔时间
+						logger.Warnf("trying to restart HTTPS server on %s (Attempt %d)", address, i)
+					}
+				}
 			}(address, certFile, keyFile)
 		} else {
 			// 启动HTTP服务
 			wg.Add(1)
 			go func(address string) {
 				defer wg.Done()
-				err := router.Run(address)
-				logger.Errorf("route Run err:%v", err)
+				for i := range 10 {
+					if err := router.Run(address); err != nil {
+						logger.Errorf("route run err:%v", err)
+						time.Sleep(10 * time.Second) // 重试间隔时间
+						logger.Warnf("trying to restart HTTP server on %s (Attempt %d)", address, i)
+					}
+				}
 			}(address)
 		}
 	}
