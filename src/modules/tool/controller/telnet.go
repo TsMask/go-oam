@@ -5,8 +5,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/tsmask/go-oam/src/framework/logger"
 	"github.com/tsmask/go-oam/src/framework/route/resp"
+	"github.com/tsmask/go-oam/src/framework/ws"
 	"github.com/tsmask/go-oam/src/modules/tool/service"
 	wsService "github.com/tsmask/go-oam/src/modules/ws/service"
 )
@@ -14,7 +14,6 @@ import (
 // 实例化控制层 TelnetController 结构体
 var NewTelnet = &TelnetController{
 	telnetService: service.NewTelnet,
-	wsService:     wsService.NewWS,
 }
 
 // Telnet
@@ -22,7 +21,6 @@ var NewTelnet = &TelnetController{
 // PATH /tool/telnet
 type TelnetController struct {
 	telnetService *service.Telnet // Telnet 命令交互工具服务
-	wsService     *wsService.WS   // WebSocket 服务
 }
 
 // Telnet 命令执行
@@ -75,21 +73,25 @@ func (s TelnetController) Session(c *gin.Context) {
 		return
 	}
 
+	wsConn := ws.ServerConn{
+		BindUID: query.NeUID, // 绑定唯一标识ID
+	}
 	// 将 HTTP 连接升级为 WebSocket 连接
-	wsConn := s.wsService.UpgraderWs(c.Writer, c.Request)
-	if wsConn == nil {
+	if err := wsConn.Upgrade(c.Writer, c.Request); err != nil {
+		c.JSON(422, resp.CodeMsg(resp.CODE_PARAM_CHEACK, err.Error()))
 		return
 	}
 	defer wsConn.Close()
-
-	wsClient := s.wsService.ClientCreate(query.NeUID, nil, wsConn, nil)
-	go s.wsService.ClientWriteListen(wsClient)
-	go s.wsService.ClientReadListen(wsClient, s.telnetService.Session)
+	go wsConn.WriteListen(1, nil)
+	go wsConn.ReadListen(1, nil, s.telnetService.Session)
+	// 发客户端id确认是否连接
+	wsService.SendOK(&wsConn, "", map[string]string{
+		"clientId": wsConn.ClientId(),
+	})
 
 	// 等待停止信号
-	for value := range wsClient.StopChan {
-		s.wsService.ClientClose(wsClient.ID)
-		logger.Infof("ws Stop Client UID %s %s", wsClient.BindUid, value)
+	for range wsConn.StopChan {
+		wsConn.Close()
 		return
 	}
 }

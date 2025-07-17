@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -9,8 +8,8 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/tsmask/go-oam/src/framework/cmd"
-	"github.com/tsmask/go-oam/src/framework/logger"
 	"github.com/tsmask/go-oam/src/framework/route/resp"
+	"github.com/tsmask/go-oam/src/framework/ws"
 	"github.com/tsmask/go-oam/src/modules/tool/service"
 	wsService "github.com/tsmask/go-oam/src/modules/ws/service"
 )
@@ -18,7 +17,6 @@ import (
 // 实例化控制层 IPerfController 结构体
 var NewIPerf = &IPerfController{
 	iperfService: service.NewIPerf,
-	wsService:    wsService.NewWS,
 }
 
 // iperf 网络性能测试工具 https://iperf.fr/iperf-download.php
@@ -26,7 +24,6 @@ var NewIPerf = &IPerfController{
 // PATH /tool/iperf
 type IPerfController struct {
 	iperfService *service.IPerf // IPerf3 网络性能测试工具服务
-	wsService    *wsService.WS  // WebSocket 服务
 }
 
 // iperf 版本信息
@@ -98,16 +95,22 @@ func (s IPerfController) Run(c *gin.Context) {
 	}
 	defer clientSession.Close()
 
+	wsConn := ws.ServerConn{
+		BindUID: query.NeUID, // 绑定唯一标识ID
+	}
 	// 将 HTTP 连接升级为 WebSocket 连接
-	wsConn := s.wsService.UpgraderWs(c.Writer, c.Request)
-	if wsConn == nil {
+	if err := wsConn.Upgrade(c.Writer, c.Request); err != nil {
+		c.JSON(422, resp.CodeMsg(resp.CODE_PARAM_CHEACK, err.Error()))
 		return
 	}
 	defer wsConn.Close()
-
-	wsClient := s.wsService.ClientCreate(query.NeUID, nil, wsConn, clientSession)
-	go s.wsService.ClientWriteListen(wsClient)
-	go s.wsService.ClientReadListen(wsClient, s.iperfService.Run)
+	wsConn.SetAnyConn(clientSession)
+	go wsConn.WriteListen(1, nil)
+	go wsConn.ReadListen(1, nil, s.iperfService.Run)
+	// 发客户端id确认是否连接
+	wsService.SendOK(&wsConn, "", map[string]string{
+		"clientId": wsConn.ClientId(),
+	})
 
 	// 等待1秒，排空首次消息
 	time.Sleep(1 * time.Second)
@@ -121,16 +124,10 @@ func (s IPerfController) Run(c *gin.Context) {
 		case ms := <-msTicker.C:
 			outputByte := clientSession.Read()
 			if len(outputByte) > 0 {
-				outputStr := string(outputByte)
-				msgByte, _ := json.Marshal(resp.Ok(map[string]any{
-					"requestId": fmt.Sprintf("iperf3_%d", ms.UnixMilli()),
-					"data":      outputStr,
-				}))
-				wsClient.MsgChan <- msgByte
+				wsService.SendOK(&wsConn, fmt.Sprintf("iperf_%d", ms.UnixMilli()), string(outputByte))
 			}
-		case <-wsClient.StopChan: // 等待停止信号
-			s.wsService.ClientClose(wsClient.ID)
-			logger.Infof("ws Stop Client UID %s", wsClient.BindUid)
+		case <-wsConn.StopChan: // 等待停止信号
+			wsConn.Close()
 			return
 		}
 	}

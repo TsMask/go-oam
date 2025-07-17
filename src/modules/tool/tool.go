@@ -12,7 +12,7 @@ func SetupRoute(router gin.IRouter) {
 	logger.Infof("开始加载 ====> tool 模块路由")
 
 	// iperf 网络性能测试工具
-	toolIperf := controller.NewPing
+	toolIperf := controller.NewIPerf
 	iperfGroup := router.Group("/tool/iperf")
 	{
 		iperfGroup.GET("/v", toolIperf.Version)

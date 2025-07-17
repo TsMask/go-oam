@@ -8,14 +8,13 @@ import (
 	"sync"
 
 	"github.com/tsmask/go-oam/src/framework/logger"
-	"github.com/tsmask/go-oam/src/framework/route/resp"
 	"github.com/tsmask/go-oam/src/modules/ws/model"
 
 	"github.com/shirou/gopsutil/v4/process"
 )
 
 // GetProcessData 获取进程数据
-func GetProcessData(requestID string, data any) ([]byte, error) {
+func GetProcessData(data any) ([]model.PsProcessData, error) {
 	msgByte, _ := json.Marshal(data)
 	var query model.PsProcessQuery
 	err := json.Unmarshal(msgByte, &query)
@@ -121,9 +120,5 @@ func GetProcessData(requestID string, data any) ([]byte, error) {
 		return dataArr[i].PID < dataArr[j].PID
 	})
 
-	resultByte, err := json.Marshal(resp.Ok(map[string]any{
-		"requestId": requestID,
-		"data":      dataArr,
-	}))
-	return resultByte, err
+	return dataArr, err
 }

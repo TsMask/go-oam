@@ -3,15 +3,14 @@ package service
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"strings"
-	"time"
 
 	"github.com/tsmask/go-oam/src/framework/cmd"
 	"github.com/tsmask/go-oam/src/framework/logger"
-	"github.com/tsmask/go-oam/src/framework/route/resp"
+	"github.com/tsmask/go-oam/src/framework/ws"
 	"github.com/tsmask/go-oam/src/modules/tool/model"
 	wsModel "github.com/tsmask/go-oam/src/modules/ws/model"
+	wsService "github.com/tsmask/go-oam/src/modules/ws/service"
 )
 
 // 实例化服务层 Ping 结构体
@@ -51,69 +50,51 @@ func (s Ping) Version() (string, error) {
 }
 
 // Run 接收ping终端交互业务处理
-func (s Ping) Run(client *wsModel.WSClient, reqMsg wsModel.WSRequest) {
-	// 必传requestId确认消息
-	if reqMsg.RequestID == "" {
-		msg := "message requestId is required"
-		logger.Infof("ws Ping run UID %s err: %s", client.BindUid, msg)
-		msgByte, _ := json.Marshal(resp.ErrMsg(msg))
-		client.MsgChan <- msgByte
+func (s Ping) Run(conn *ws.ServerConn, msg []byte) {
+	var reqMsg wsModel.WSRequest
+	if err := json.Unmarshal(msg, &reqMsg); err != nil {
+		wsService.SendErr(conn, "", "message format json error")
 		return
 	}
 
-	var resByte []byte
-	var err error
+	// 必传requestId确认消息
+	if reqMsg.RequestID == "" {
+		wsService.SendErr(conn, "", "message requestId is required")
+		return
+	}
 
 	switch reqMsg.Type {
 	case "close":
-		// 主动关闭
-		resultByte, _ := json.Marshal(resp.OkMsg("user initiated closure"))
-		client.MsgChan <- resultByte
-		// 等待1s后关闭连接
-		time.Sleep(1 * time.Second)
-		client.StopChan <- struct{}{}
+		conn.Close()
 		return
 	case "ping":
 		// SSH会话消息接收写入会话
-		var command string
-		command, err = s.parseOptions(reqMsg.Data)
-		if command != "" && err == nil {
-			sshClientSession := client.ChildConn.(*cmd.LocalClientSession)
-			_, err = sshClientSession.Write(command)
+		if command, err := s.parseOptions(reqMsg.Data); command != "" && err == nil {
+			localClientSession := conn.GetAnyConn().(*cmd.LocalClientSession)
+			if _, err := localClientSession.Write(command); err != nil {
+				wsService.SendErr(conn, reqMsg.RequestID, err.Error())
+			}
 		}
 	case "ctrl-c":
 		// 模拟按下 Ctrl+C
-		sshClientSession := client.ChildConn.(*cmd.LocalClientSession)
-		_, err = sshClientSession.Write("\u0003\n")
+		localClientSession := conn.GetAnyConn().(*cmd.LocalClientSession)
+		if _, err := localClientSession.Write("\u0003\n"); err != nil {
+			wsService.SendErr(conn, reqMsg.RequestID, err.Error())
+		}
 	case "resize":
 		// 会话窗口重置
-		msgByte, _ := json.Marshal(reqMsg.Data)
 		var data struct {
 			Cols int `json:"cols"`
 			Rows int `json:"rows"`
 		}
-		err = json.Unmarshal(msgByte, &data)
-		if err == nil {
-			localClientSession := client.ChildConn.(*cmd.LocalClientSession)
+		msgByte, _ := json.Marshal(reqMsg.Data)
+		if err := json.Unmarshal(msgByte, &data); err == nil {
+			localClientSession := conn.GetAnyConn().(*cmd.LocalClientSession)
 			localClientSession.WindowChange(data.Cols, data.Rows)
 		}
 	default:
-		err = fmt.Errorf("message type %s not supported", reqMsg.Type)
-	}
-
-	if err != nil {
-		logger.Warnf("ws Ping run UID %s err: %s", client.BindUid, err.Error())
-		msgByte, _ := json.Marshal(resp.ErrMsg(err.Error()))
-		client.MsgChan <- msgByte
-		if err == io.EOF {
-			// 等待1s后关闭连接
-			time.Sleep(1 * time.Second)
-			client.StopChan <- struct{}{}
-		}
+		wsService.SendErr(conn, reqMsg.RequestID, fmt.Sprintf("message type %s not supported", reqMsg.Type))
 		return
-	}
-	if len(resByte) > 0 {
-		client.MsgChan <- resByte
 	}
 }
 

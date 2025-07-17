@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/tsmask/go-oam/src/framework/logger"
-	"github.com/tsmask/go-oam/src/framework/route/resp"
 	"github.com/tsmask/go-oam/src/modules/ws/model"
 
 	"github.com/shirou/gopsutil/v4/net"
@@ -14,7 +13,7 @@ import (
 )
 
 // GetNetConnections 获取网络连接进程
-func GetNetConnections(requestID string, data any) ([]byte, error) {
+func GetNetConnections(data any) ([]model.NetConnectData, error) {
 	msgByte, _ := json.Marshal(data)
 	var query model.NetConnectQuery
 	err := json.Unmarshal(msgByte, &query)
@@ -57,9 +56,5 @@ func GetNetConnections(requestID string, data any) ([]byte, error) {
 		}
 	}
 
-	resultByte, err := json.Marshal(resp.Ok(map[string]any{
-		"requestId": requestID,
-		"data":      dataArr,
-	}))
-	return resultByte, err
+	return dataArr, err
 }
