@@ -35,11 +35,7 @@ func New(o *Opts) *Opts {
 	config.InitConfig()
 	config.Set("dev", o.Dev)
 	if o.License != nil {
-		config.Set("ne.type", o.License.NeType)
-		config.Set("ne.version", o.License.Version)
-		config.Set("ne.serialNum", o.License.SerialNum)
-		config.Set("ne.expiryDate", o.License.ExpiryDate)
-		config.Set("ne.capability", o.License.Capability)
+		LicenseRrefresh(*o.License)
 	}
 	if o.ConfPath != "" {
 		config.ReadExternalConfig(o.ConfPath)
@@ -94,4 +90,13 @@ func (o *Opts) Run() error {
 
 	modules.RouteService(config.Dev(), o.setupArr)
 	return nil
+}
+
+// LicenseRrefresh 刷新网元License信息
+func LicenseRrefresh(lic License) {
+	config.Set("ne.type", lic.NeType)
+	config.Set("ne.version", lic.Version)
+	config.Set("ne.serialNum", lic.SerialNum)
+	config.Set("ne.expiryDate", lic.ExpiryDate)
+	config.Set("ne.capability", lic.Capability)
 }
