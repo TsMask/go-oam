@@ -6,10 +6,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/tsmask/go-oam/src/callback"
-	"github.com/tsmask/go-oam/src/framework/config"
-	"github.com/tsmask/go-oam/src/framework/logger"
-	"github.com/tsmask/go-oam/src/modules"
+	"github.com/tsmask/go-oam/framework/config"
+	"github.com/tsmask/go-oam/framework/logger"
+	"github.com/tsmask/go-oam/modules"
+	"github.com/tsmask/go-oam/modules/callback"
 )
 
 // License 网元传入

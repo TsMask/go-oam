@@ -8,7 +8,7 @@ import (
 
 	"github.com/tsmask/go-oam"
 
-	"github.com/tsmask/go-oam/src/framework/telnet"
+	"github.com/tsmask/go-oam/framework/telnet"
 )
 
 var wg sync.WaitGroup
@@ -21,7 +21,7 @@ func main() {
 
 		o := oam.New(&oam.Opts{
 			Dev:      true,
-			ConfPath: "./local/oam.yaml",
+			ConfPath: "./dev/oam.yaml",
 			License: &oam.License{
 				NeType:     "NE",
 				Version:    "1.0",

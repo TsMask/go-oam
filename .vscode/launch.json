@@ -27,7 +27,7 @@
             "mode": "debug",
             "program": "examples/standalone/main.go",
             "console": "integratedTerminal",
-            "args": ["--dev", "-c", "./local/omc.yaml"]
+            "args": ["--dev", "-c", "./dev/omc.yaml"]
         }
     ]
 }

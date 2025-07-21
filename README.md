@@ -9,6 +9,44 @@
 
 OAM SDK 是一个用于网元与网管进行交互的函数集
 
+## 目录结构
+
+```text
+go-oam
+├── .vscode                               目录-vscode配置
+├── dev                                   目录-本地开发配置
+│   ├── certs                             目录-证书
+│   └── oam.yaml                          文件-配置文件
+├── examples                              目录-运行示例
+│   ├── independent_coprocessor           目录-独立协程模式
+│   ├── oam_manager                       目录-现有模式
+│   └── standalone                        目录-独立模式
+├── framework                             目录-核心框架
+│   ├── cmd                               目录-本地命令行
+│   ├── config                            目录-配置文件
+│   ├── fetch                             目录-网络请求封装
+│   ├── logger                            目录-日志工具
+│   ├── router                            目录-gin路由引擎
+│   └── ...
+├── modules                               目录-模块
+│   ├── callback                          目录-回调处理
+│   ├── common                            目录-通用模块
+│   ├── push                              目录-推送模块
+│   ├── state                             目录-状态模块
+│   ├── tool                              目录-工具模块
+│   ├── ws                                目录-WS模块
+│   └── modules.go                        文件-加载模块
+├── alarm.go                              文件-告警推送函数
+├── cdr.go                                文件-话单推送函数
+├── common.go                             文件-通用推送函数
+├── kpi.go                                文件-KPI推送函数
+├── nb_state.go                           文件-基站状态推送函数
+├── ue_nb.go                              文件-UE与NB推送函数
+├── oam.go                                文件-库函数
+├── LICENSE                               文件-许可证
+└──  README.md                            文件-项目说明
+```
+
 ## 模块
 
 ### 通用模块

@@ -13,7 +13,7 @@ import (
 func main() {
 	o := oam.New(&oam.Opts{
 		Dev:      true,
-		ConfPath: "./local/oam.yaml",
+		ConfPath: "./dev/oam.yaml",
 		License: &oam.License{
 			NeType:     "NE",
 			Version:    "1.0",

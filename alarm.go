@@ -3,9 +3,9 @@ package oam
 import (
 	"fmt"
 
-	"github.com/tsmask/go-oam/src/framework/route/resp"
-	"github.com/tsmask/go-oam/src/modules/push/model"
-	"github.com/tsmask/go-oam/src/modules/push/service"
+	"github.com/tsmask/go-oam/framework/route/resp"
+	"github.com/tsmask/go-oam/modules/push/model"
+	"github.com/tsmask/go-oam/modules/push/service"
 
 	"github.com/gin-gonic/gin"
 )
