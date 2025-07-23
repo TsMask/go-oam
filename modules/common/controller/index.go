@@ -17,7 +17,7 @@ type IndexController struct{}
 
 // 根路由
 //
-// GET /
+// GET /i
 //
 //	@Tags			common
 //	@Accept			json
@@ -25,7 +25,7 @@ type IndexController struct{}
 //	@Success		200	{object}	object	"Response Results"
 //	@Summary		Root Route
 //	@Description	Root Route
-//	@Router			/ [get]
+//	@Router			/i [get]
 func (s *IndexController) Handler(c *gin.Context) {
 	c.JSON(200, resp.OkData(map[string]any{
 		"type":       config.Get("ne.type"),

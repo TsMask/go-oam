@@ -41,7 +41,7 @@ func Dev() bool {
 // LicenseDaysLeft 网元License剩余天数，小于0是过期
 func LicenseDaysLeft() int64 {
 	expire := conf.GetString("ne.expiryDate")
-	if expire == "" || expire == "<nil>" {
+	if expire == "" || expire == "<nil>" || expire == "2000-00-00" {
 		return -1
 	}
 	// 解析过期时间
