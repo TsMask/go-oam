@@ -45,7 +45,7 @@ func SetupRoute(router gin.IRouter) {
 	}
 
 	// snmp 命令交互工具
-	toolSnmp := controller.NewTelnet
+	toolSnmp := controller.NewSNMP
 	snmpGroup := router.Group("/tool/snmp")
 	{
 		snmpGroup.POST("/command", toolSnmp.Command)

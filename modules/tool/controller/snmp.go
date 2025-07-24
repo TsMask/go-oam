@@ -27,7 +27,7 @@ type SNMPController struct {
 //
 // POST /command
 //
-//	@Tags			tool/SNMP
+//	@Tags			tool/snmp
 //	@Accept			json
 //	@Produce		json
 //	@Param			command	query		string	true	"Command"
@@ -35,10 +35,12 @@ type SNMPController struct {
 //	@Security		TokenAuth
 //	@Summary		SNMP run
 //	@Description	SNMP run
-//	@Router			/tool/SNMP/command [post]
+//	@Router			/tool/snmp/command [post]
 func (s SNMPController) Command(c *gin.Context) {
 	var body struct {
-		Command string `form:"command" binding:"required"` // 命令
+		Oid      string `json:"oid" binding:"required"`                            // OID
+		OperType string `json:"operType" binding:"required,oneof=GET GETNEXT SET"` // 操作类型
+		Value    any    `json:"value"`                                             // 值
 	}
 	if err := c.ShouldBindBodyWithJSON(&body); err != nil {
 		errMsgs := fmt.Sprintf("bind err: %s", resp.FormatBindError(err))
@@ -46,7 +48,7 @@ func (s SNMPController) Command(c *gin.Context) {
 		return
 	}
 
-	output := s.snmpService.Command(body.Command)
+	output := s.snmpService.Command(body.Oid, body.OperType, body.Value)
 	c.JSON(200, resp.OkData(output))
 }
 
@@ -54,7 +56,7 @@ func (s SNMPController) Command(c *gin.Context) {
 //
 // GET /session
 //
-//	@Tags			tool/SNMP
+//	@Tags			tool/snmp
 //	@Accept			json
 //	@Produce		json
 //	@Param			neUid			query		string	true	"网元唯一标识"						default(001)
@@ -62,7 +64,7 @@ func (s SNMPController) Command(c *gin.Context) {
 //	@Security		TokenAuth
 //	@Summary		(ws://) SNMP endpoint session
 //	@Description	(ws://) SNMP endpoint session
-//	@Router			/tool/SNMP/session [get]
+//	@Router			/tool/snmp/session [get]
 func (s SNMPController) Session(c *gin.Context) {
 	var query struct {
 		NeUID string `form:"neUid"  binding:"required"` // 网元唯一标识

@@ -22,7 +22,7 @@ type CallbackHandler interface {
 	// Telent 消息处理
 	Telent(command string) string
 	// SNMP 消息处理
-	SNMP(command string) string
+	SNMP(oid, operType string, value any) any
 }
 
 // Standby 备用状态
@@ -54,9 +54,9 @@ func Telent(command string) string {
 }
 
 // SNMP 消息处理
-func SNMP(command string) string {
+func SNMP(oid, operType string, value any) any {
 	if invoke != nil {
-		return invoke.Telent(command)
+		return invoke.SNMP(oid, operType, value)
 	}
 	return "snmp unrealized"
 }

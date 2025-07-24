@@ -52,6 +52,6 @@ func (o *oamCallback) Telent(command string) string {
 }
 
 // SNMP implements callback.CallbackHandler.
-func (o *oamCallback) SNMP(command string) string {
+func (o *oamCallback) SNMP(oid, operType string, value any) any {
 	return "SNMP implements"
 }
