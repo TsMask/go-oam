@@ -15,12 +15,13 @@ func main() {
 
 	// 加入OAM相关接口模块
 	o := oam.New(&oam.Opts{
-		License: &oam.License{
+		License: oam.License{
 			NeType:     "NE",
 			Version:    "1.0",
 			SerialNum:  "1234567890",
 			ExpiryDate: "2025-12-31",
-			Capability: 100,
+			NbNumber:   10,
+			UeNumber:   100,
 		},
 	})
 	o.SetupCallback(new(oamCallback))

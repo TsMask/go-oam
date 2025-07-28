@@ -33,7 +33,7 @@ func (s *State) Info() model.State {
 	version := fmt.Sprint(config.Get("ne.version"))
 	serialNum := fmt.Sprint(config.Get("ne.serialNum"))
 	expiryDate := fmt.Sprint(config.Get("ne.expiryDate"))
-	capability := parse.Number(config.Get("ne.capability"))
+	capability := parse.Number(config.Get("ne.ueNumber"))
 	standby := callback.Standby()
 	hostName, _ := os.Hostname()
 	memUsage, cpuUsage := getMemAndCPUUsage()

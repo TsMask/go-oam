@@ -24,7 +24,8 @@ ne:
   version: "" # 版本号
   serialNum: "" # 序列号
   expiryDate: "2000-01-01" # 过期时间
-  capability: 0 # 容量
+  nbNumber: 0 # 基站限制数量
+  ueNumber: 0 # 终端限制数量
 
 # 日志
 logger:

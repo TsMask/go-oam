@@ -18,14 +18,15 @@ type License struct {
 	Version    string
 	SerialNum  string
 	ExpiryDate string
-	Capability int // AMF是GnbNum UDM是UeNum
+	NbNumber   int // 基站限制数量 AMF MME
+	UeNumber   int // 终端限制数量 UDM
 }
 
 // Opts SDK参数
 type Opts struct {
 	Dev      bool                // 开发模式
 	ConfPath string              // 独立启动的配置文件路径
-	License  *License            // 网元License传入
+	License  License             // 网元License传入
 	setupArr []func(gin.IRouter) // 外部路由拓展
 }
 
@@ -34,16 +35,16 @@ func New(o *Opts) *Opts {
 	// 配置参数
 	config.InitConfig()
 	config.Set("dev", o.Dev)
-	if o.License != nil {
-		LicenseRrefresh(*o.License)
-	}
+	LicenseRrefresh(o.License)
 	if o.ConfPath != "" {
 		config.ReadExternalConfig(o.ConfPath)
 	}
 	// 程序日志
 	neTypeLower := strings.ToLower(fmt.Sprint(config.Get("ne.type")))
-	loggerConf := config.Get("logger").(map[string]any)
-	loggerConf["filename"] = fmt.Sprintf("%s_oam.log", neTypeLower)
+	loggerConf, ok := config.Get("logger").(map[string]any)
+	if ok {
+		loggerConf["filename"] = fmt.Sprintf("%s_oam.log", neTypeLower)
+	}
 	logger.InitLogger()
 	return o
 }
@@ -88,15 +89,19 @@ func (o *Opts) Run() error {
 		return fmt.Errorf("oam is not enable")
 	}
 
-	modules.RouteService(config.Dev(), o.setupArr)
-	return nil
+	return modules.RouteService(config.Dev(), o.setupArr)
 }
 
 // LicenseRrefresh 刷新网元License信息
 func LicenseRrefresh(lic License) {
-	config.Set("ne.type", lic.NeType)
-	config.Set("ne.version", lic.Version)
-	config.Set("ne.serialNum", lic.SerialNum)
-	config.Set("ne.expiryDate", lic.ExpiryDate)
-	config.Set("ne.capability", lic.Capability)
+	neConf, ok := config.Get("ne").(map[string]any)
+	if !ok {
+		return
+	}
+	neConf["type"] = lic.NeType
+	neConf["version"] = lic.Version
+	neConf["serialNum"] = lic.SerialNum
+	neConf["expiryDate"] = lic.ExpiryDate
+	neConf["nbNumber"] = lic.NbNumber
+	neConf["ueNumber"] = lic.UeNumber
 }
