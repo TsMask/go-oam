@@ -32,7 +32,8 @@ func (s *IndexController) Handler(c *gin.Context) {
 		"version":    config.Get("ne.version"),
 		"serialNum":  config.Get("ne.serialNum"),
 		"expiryDate": config.Get("ne.expiryDate"),
-		"capability": config.Get("ne.ueNumber"),
+		"ueNumber":   config.Get("ne.ueNumber"),
+		"nbNumber":   config.Get("ne.nbNumber"),
 		"validDays":  config.LicenseDaysLeft(),
 	}))
 }

@@ -100,8 +100,8 @@ func LicenseRrefresh(lic License) {
 	}
 	neConf["type"] = lic.NeType
 	neConf["version"] = lic.Version
-	neConf["serialNum"] = lic.SerialNum
-	neConf["expiryDate"] = lic.ExpiryDate
-	neConf["nbNumber"] = lic.NbNumber
-	neConf["ueNumber"] = lic.UeNumber
+	neConf["serialnum"] = lic.SerialNum
+	neConf["expirydate"] = lic.ExpiryDate
+	neConf["nbnumber"] = lic.NbNumber
+	neConf["uenumber"] = lic.UeNumber
 }
