@@ -33,14 +33,14 @@ func ReadExternalConfig(configPath string) {
 
 // GetExt 获取外部配置信息
 //
-// GetExt("server.0.ipv4")
+// GetExt("oamConfig.enable")
 func GetExt(key string) any {
 	return confExt.Get(key)
 }
 
 // SetExt 修改外部配置信息
 //
-// SetExt("server.0.ipv4")
+// SetExt("oamConfig.enable", false)
 func SetExt(key string, value any) {
 	confExt.Set(key, value)
 	Set(key, value)

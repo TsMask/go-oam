@@ -1,0 +1,31 @@
+pubConfigPath: "/usr/local/etc/conf/para5G.yaml"
+httpManageCfg:
+  ipType: "ipv4"
+  ipv4: "127.0.0.1"
+  ipv6: ""
+  port: 33010
+  scheme: "http"
+oamConfig:
+  enable: true
+  ipType: "ipv4"
+  ipv4: "127.0.0.1"
+  ipv6: ""
+  port: 33030
+  scheme: "http"
+  neConfig:
+    neId: "001"
+    rmUid: "4400HXNE001"
+    neName: "NE_001"
+    dn: ""
+    vendorName: ""
+    province: ""
+    pvFlag: "PNF"
+snmpConfig:
+  enable: false
+  ipType: "ipv4"
+  ipv4: "127.0.0.1"
+  ipv6: ""
+  port: 4957
+kpiConfig:
+  enable: true
+  timer: 60
