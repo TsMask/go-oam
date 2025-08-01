@@ -56,9 +56,14 @@ OAM SDK 是一个用于网元与网管进行交互的函数集
   1. 上报推送，接收回调
   2. 历史查询，自定义清除时间
 
+### 下发模块
+
+- 网管信息
+- 配置（待计划）
+
 ## 使用方法
 
-1. 下载完整依赖库，在`go.mod`文件中引入
+1. 下载完整依赖库，在`go.mod`文件中引入替换为本地库
 
 ```mod
 replace github.com/tsmask/go-oam v1.0.0 => ./lib/go-oam
@@ -91,24 +96,24 @@ func (o *oamCallback) Telent(command string) string {
 	return "Telent implements"
 }
 // SNMP implements callback.CallbackHandler.
-func (o *oamCallback) SNMP(command string) string {
+func (o *oamCallback) SNMP(oid, operType string, value any) any {
 	return "SNMP implements"
 }
 
-
 // 加入OAM相关接口模块
 o := oam.New(&oam.Opts{
-    License: &oam.License{
-        NeType:     "NE",
-        Version:    "1.0",
-        SerialNum:  "1234567890",
-        ExpiryDate: "2025-12-31",
-        Capability: 100,
-    },
+  License: oam.License{
+    NeType:     "NE",
+    Version:    "1.0",
+    SerialNum:  "1234567890",
+    ExpiryDate: "2025-12-31",
+    NbNumber:   10,
+    UeNumber:   100,
+  },
 })
 o.SetupCallback(new(oamCallback))
-if err := o.RouteExpose(router); err != nil {
-    fmt.Printf("oam run fail: %s\n", err.Error())
+if err := o.RouteExpose(r); err != nil {
+  fmt.Printf("oam run fail: %s\n", err.Error())
 }
 
 ```
