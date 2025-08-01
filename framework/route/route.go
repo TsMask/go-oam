@@ -50,12 +50,15 @@ func Engine(dev bool) *gin.Engine {
 func Run(router *gin.Engine) error {
 	// 开启HTTP服务
 	var wg sync.WaitGroup
-	routeArr := config.Get("route")
-	if routeArr == nil {
+	routeArr, ok := config.Get("route").([]any)
+	if routeArr == nil || !ok {
 		return fmt.Errorf("route config not found")
 	}
-	for _, v := range routeArr.([]any) {
-		item := v.(map[string]any)
+	for _, v := range routeArr {
+		item, ok := v.(map[string]any)
+		if !ok {
+			return fmt.Errorf("route config not found")
+		}
 		address := fmt.Sprint(item["addr"])
 		schema := fmt.Sprint(item["schema"])
 		if schema == "https" && schema != "<nil>" {

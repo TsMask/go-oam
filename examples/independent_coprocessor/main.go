@@ -20,8 +20,7 @@ func main() {
 		defer wg.Done()
 
 		o := oam.New(&oam.Opts{
-			Dev:      true,
-			ConfPath: "./dev/oam.yaml",
+			Dev: true,
 			License: oam.License{
 				NeType:     "NE",
 				Version:    "1.0",
@@ -29,6 +28,18 @@ func main() {
 				ExpiryDate: "2025-12-31",
 				NbNumber:   10,
 				UeNumber:   100,
+			},
+			ListenArr: []oam.Listen{
+				{
+					Addr:   "0.0.0.0:29565",
+					Schema: "http",
+				},
+				{
+					Addr:   "0.0.0.0:29567",
+					Schema: "https",
+					Cert:   "./dev/certs/www.oam.net.crt",
+					Key:    "./dev/certs/www.oam.net.key",
+				},
 			},
 		})
 		if err := o.Run(); err != nil {
