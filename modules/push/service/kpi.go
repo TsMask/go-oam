@@ -110,26 +110,32 @@ func (s *KPI) KPITimerStop() {
 
 // KeySet 对Key原子设置
 func (s *KPI) KeySet(key string, v float64) {
+	if s == nil {
+		return
+	}
 	s.data.Store(key, v)
-}
-
-// KeyInc 对Key原子累加
-func (s *KPI) KeyInc(key string) {
-	s.data.Store(key, s.KeyGet(key)+1)
-}
-
-// KeyDec 对Key原子累减
-func (s *KPI) KeyDec(key string) {
-	s.data.Store(key, s.KeyGet(key)-1)
 }
 
 // KeyGet 对Key原子获取
 func (s *KPI) KeyGet(key string) float64 {
+	if s == nil {
+		return 0
+	}
 	value, ok := s.data.Load(key)
 	if !ok {
 		return 0
 	}
 	return value.(float64)
+}
+
+// KeyInc 对Key原子累加
+func (s *KPI) KeyInc(key string) {
+	s.KeySet(key, s.KeyGet(key)+1)
+}
+
+// KeyDec 对Key原子累减
+func (s *KPI) KeyDec(key string) {
+	s.KeySet(key, s.KeyGet(key)-1)
 }
 
 // KPIHistoryList KPI历史列表
