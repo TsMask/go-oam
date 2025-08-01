@@ -33,14 +33,13 @@ func main() {
 
 			// 发话单
 			common := oam.Common{
-				NeUid: "neUid", // 网元唯一标识
-				Type:  "common",
+				Type: "common",
 				Data: map[string]any{
 					"commonSecond": t.Second(),
 					"commonTime":   t.UnixMilli(),
 				},
 			}
-			commonErr := oam.CommonPush("http", "192.168.5.58:29565", &common)
+			commonErr := oam.CommonPush(&common)
 			if commonErr != nil {
 				fmt.Println("==> Send err Common:", commonErr.Error())
 			} else {
@@ -50,7 +49,6 @@ func main() {
 			// 发告警
 			alarmId := fmt.Sprintf("100_%d", t.UnixMilli())
 			alarm := oam.Alarm{
-				NeUid:             "neUid",                            // 网元唯一标识
 				AlarmId:           alarmId,                            // 告警ID
 				AlarmCode:         100,                                // 告警状态码
 				AlarmType:         oam.ALARM_TYPE_COMMUNICATION_ALARM, // 告警类型 CommunicationAlarm,EquipmentAlarm,ProcessingFailure,EnvironmentalAlarm,QualityOfServiceAlarm
@@ -62,7 +60,7 @@ func main() {
 				AddInfo:           "addInfo",                          // 告警辅助信息
 				LocationInfo:      "locationInfo",                     // 告警定位信息
 			}
-			errs := oam.AlarmPush("http", "192.168.5.58:29565", &alarm)
+			errs := oam.AlarmPush(&alarm)
 			if errs != nil {
 				fmt.Println("==> Send err Alarm:", errs.Error())
 			} else {
@@ -71,7 +69,6 @@ func main() {
 
 			// 发终端接入基站
 			uenb := oam.UENB{
-				NeUid:  "neUid",                      // 网元唯一标识
 				NBId:   fmt.Sprint(t.Second()),       // 基站ID
 				CellId: "1",                          // 小区ID
 				TAC:    "4388",                       // TAC
@@ -79,7 +76,7 @@ func main() {
 				Result: oam.UENB_RESULT_AUTH_SUCCESS, // 结果值
 				Type:   oam.UENB_TYPE_AUTH,           // 终端接入基站类型
 			}
-			errs = oam.UENBPush("http", "192.168.5.58:29565", &uenb)
+			errs = oam.UENBPush(&uenb)
 			if errs != nil {
 				fmt.Println("==> Send err UENBTime:", errs.Error())
 			} else {
@@ -88,7 +85,6 @@ func main() {
 
 			// 发基站状态
 			nbState := oam.NBState{
-				NeUid:      "neUid",                // 网元唯一标识
 				Address:    "192.168.101.112",      // 基站地址
 				DeviceName: "TestNB",               // 基站设备名称
 				State:      oam.NB_STATE_OFF,       // 基站状态 ON/OFF
@@ -96,7 +92,7 @@ func main() {
 				Name:       "TestName",             // 基站名称 网元标记
 				Position:   "TestPosition",         // 基站位置 网元标记
 			}
-			errs = oam.NBStatePush("http", "192.168.5.58:29565", &nbState)
+			errs = oam.NBStatePush(&nbState)
 			if errs != nil {
 				fmt.Println("==> Send err NBStateTime:", errs.Error())
 			} else {
@@ -105,7 +101,6 @@ func main() {
 
 			// 发话单
 			cdr := oam.CDR{
-				NeUid: "neUid", // 网元唯一标识
 				Data: map[string]any{
 					"seqNumber":    true,
 					"callDuration": t.Second(),
@@ -114,7 +109,7 @@ func main() {
 					"releaseTime":  t.UnixMilli(),
 				},
 			}
-			errs = oam.CDRPush("http", "192.168.5.58:29565", &cdr)
+			errs = oam.CDRPush(&cdr)
 			if errs != nil {
 				fmt.Println("==> Send err CDR:", errs.Error())
 			} else {
@@ -141,6 +136,12 @@ func main() {
 	oam.NBStateHistoryClearTimer()
 	// 话单历史清除
 	oam.CDRHistoryClearTimer()
+	// OMC 信息设置
+	oam.OMCInfoSet(oam.OMC{
+		Url:     "http://192.168.5.58:29565",
+		NeUID:   "12345678",
+		CoreUID: "87654321",
+	})
 
 	o.RouteAdd(func(r gin.IRouter) {
 		// 网管接收端收通用
@@ -169,7 +170,7 @@ func main() {
 			return nil
 		})
 		// 指标发送测试
-		oam.KPITimerStart("http", "192.168.5.58:29565", "neUid", 10*time.Second)
+		oam.KPITimerStart(10 * time.Second)
 		// 网管接收端收KPI
 		oam.KPIReceiveRoute(r, func(kpi oam.KPI) error {
 			fmt.Println("<== Receive KPI", kpi)

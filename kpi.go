@@ -16,14 +16,15 @@ type KPI = model.KPI
 var kpiTimer *service.KPI
 
 // KPITimerStart KPI开启定时上报
-// 默认URL地址：/kpi/receive
-//
-// protocol 协议 http(s)
-//
-// host 服务地址 如：192.168.5.58:33020
-func KPITimerStart(protocol, host, neUid string, duration time.Duration) {
-	url := fmt.Sprintf("%s://%s%s", protocol, host, service.KPI_PUSH_URI)
-	KPITimerStartURL(url, neUid, duration)
+// 默认URL地址：KPI_PUSH_URI
+func KPITimerStart(duration time.Duration) error {
+	omcInfo := OMCInfoGet()
+	if omcInfo.Url == "" {
+		return fmt.Errorf("omc url is empty")
+	}
+	url := fmt.Sprintf("%s%s", omcInfo.Url, service.KPI_PUSH_URI)
+	KPITimerStartURL(url, omcInfo.NeUID, duration)
+	return nil
 }
 
 // KPITimerStartURL KPI开启定时上报

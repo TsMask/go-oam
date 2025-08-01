@@ -68,11 +68,12 @@ func UENBPushURL(url string, uenb *UENB) error {
 
 // UENBPush 终端接入基站推送
 // 默认URL地址：UENB_PUSH_URI
-//
-// protocol 协议 http(s)
-//
-// host 服务地址 如：192.168.5.58:33020
-func UENBPush(protocol, host string, uenb *UENB) error {
-	url := fmt.Sprintf("%s://%s%s", protocol, host, service.UENB_PUSH_URI)
+func UENBPush(uenb *UENB) error {
+	omcInfo := OMCInfoGet()
+	if omcInfo.Url == "" {
+		return fmt.Errorf("omc url is empty")
+	}
+	url := fmt.Sprintf("%s%s", omcInfo.Url, service.UENB_PUSH_URI)
+	uenb.NeUid = omcInfo.NeUID
 	return service.UENBPushURL(url, uenb)
 }

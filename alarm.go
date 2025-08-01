@@ -69,11 +69,12 @@ func AlarmPushURL(url string, alarm *Alarm) error {
 
 // AlarmPush 告警推送
 // 默认URL地址：ALARM_PUSH_URI
-//
-// protocol 协议 http(s)
-//
-// host 服务地址 如：192.168.5.58:33020
-func AlarmPush(protocol, host string, alarm *Alarm) error {
-	url := fmt.Sprintf("%s://%s%s", protocol, host, service.ALARM_PUSH_URI)
+func AlarmPush(alarm *Alarm) error {
+	omcInfo := OMCInfoGet()
+	if omcInfo.Url == "" {
+		return fmt.Errorf("omc url is empty")
+	}
+	url := fmt.Sprintf("%s%s", omcInfo.Url, service.ALARM_PUSH_URI)
+	alarm.NeUid = omcInfo.NeUID
 	return service.AlarmPushURL(url, alarm)
 }

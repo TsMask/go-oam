@@ -53,11 +53,12 @@ func NBStatePushURL(url string, nbState *NBState) error {
 
 // NBStatePush 基站状态推送
 // 默认URL地址：NB_STATE_PUSH_URI
-//
-// protocol 协议 http(s)
-//
-// host 服务地址 如：192.168.5.58:33020
-func NBStatePush(protocol, host string, nbState *NBState) error {
-	url := fmt.Sprintf("%s://%s%s", protocol, host, service.NB_STATE_PUSH_URI)
+func NBStatePush(nbState *NBState) error {
+	omcInfo := OMCInfoGet()
+	if omcInfo.Url == "" {
+		return fmt.Errorf("omc url is empty")
+	}
+	url := fmt.Sprintf("%s%s", omcInfo.Url, service.NB_STATE_PUSH_URI)
+	nbState.NeUid = omcInfo.NeUID
 	return service.NBStatePushURL(url, nbState)
 }

@@ -42,17 +42,18 @@ func CDRReceiveRoute(router gin.IRouter, onReceive func(CDR) error) {
 }
 
 // CDRPushURL 话单推送 自定义URL地址接收
-func CDRPushURL(url string, CDR *CDR) error {
-	return service.CDRPushURL(url, CDR)
+func CDRPushURL(url string, cdr *CDR) error {
+	return service.CDRPushURL(url, cdr)
 }
 
 // CDRPush 话单推送
 // 默认URL地址：CDR_PUSH_URI
-//
-// protocol 协议 http(s)
-//
-// host 服务地址 如：192.168.5.58:33020
-func CDRPush(protocol, host string, CDR *CDR) error {
-	url := fmt.Sprintf("%s://%s%s", protocol, host, service.CDR_PUSH_URI)
-	return service.CDRPushURL(url, CDR)
+func CDRPush(cdr *CDR) error {
+	omcInfo := OMCInfoGet()
+	if omcInfo.Url == "" {
+		return fmt.Errorf("omc url is empty")
+	}
+	url := fmt.Sprintf("%s%s", omcInfo.Url, service.CDR_PUSH_URI)
+	cdr.NeUid = omcInfo.NeUID
+	return service.CDRPushURL(url, cdr)
 }

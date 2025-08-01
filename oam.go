@@ -10,7 +10,12 @@ import (
 	"github.com/tsmask/go-oam/framework/logger"
 	"github.com/tsmask/go-oam/modules"
 	"github.com/tsmask/go-oam/modules/callback"
+	pullModel "github.com/tsmask/go-oam/modules/pull/model"
+	pullService "github.com/tsmask/go-oam/modules/pull/service"
 )
+
+// OMC 网管信息
+type OMC = pullModel.OMC
 
 // Listen 路由HTTP服务监听配置
 type Listen struct {
@@ -35,8 +40,8 @@ type Opts struct {
 	Dev       bool                // 开发模式
 	ConfPath  string              // 启动的配置文件路径
 	License   License             // 网元License传入
-	setupArr  []func(gin.IRouter) // 外部路由拓展
 	ListenArr []Listen            // 启动的监听地址
+	setupArr  []func(gin.IRouter) // 外部路由拓展
 }
 
 // New 初始化OAM
@@ -127,4 +132,14 @@ func LicenseRrefresh(lic License) {
 	neConf["expirydate"] = lic.ExpiryDate
 	neConf["nbnumber"] = lic.NbNumber
 	neConf["uenumber"] = lic.UeNumber
+}
+
+// OMCInfoGet 网管信息获取
+func OMCInfoGet() OMC {
+	return pullService.OMCInfoGet()
+}
+
+// OMCInfoSet 网管信息设置
+func OMCInfoSet(info OMC) {
+	pullService.OMCInfoSet(info)
 }

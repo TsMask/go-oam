@@ -49,11 +49,12 @@ func CommonPushURL(url string, common *Common) error {
 
 // CommonPush 通用推送
 // 默认URL地址：COMMON_PUSH_URI
-//
-// protocol 协议 http(s)
-//
-// host 服务地址 如：192.168.5.58:33020
-func CommonPush(protocol, host string, common *Common) error {
-	url := fmt.Sprintf("%s://%s%s", protocol, host, service.COMMON_PUSH_URI)
+func CommonPush(common *Common) error {
+	omcInfo := OMCInfoGet()
+	if omcInfo.Url == "" {
+		return fmt.Errorf("omc url is empty")
+	}
+	url := fmt.Sprintf("%s%s", omcInfo.Url, service.UENB_PUSH_URI)
+	common.NeUid = omcInfo.NeUID
 	return service.CommonPushURL(url, common)
 }
