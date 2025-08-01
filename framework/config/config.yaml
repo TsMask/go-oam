@@ -27,6 +27,12 @@ ne:
   nbNumber: 0 # 基站限制数量
   ueNumber: 0 # 终端限制数量
 
+# OMC 网管信息
+omc:
+  url: "" # 网管目标地址
+  coreUID: "" # 网管上核心网唯一标识
+  neUID: "" # 网管上网元唯一标识
+
 # 日志
 logger:
   fileDir: "/var/log"

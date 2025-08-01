@@ -4,6 +4,7 @@ import (
 	"github.com/tsmask/go-oam/framework/route"
 
 	"github.com/tsmask/go-oam/modules/common"
+	"github.com/tsmask/go-oam/modules/pull"
 	"github.com/tsmask/go-oam/modules/push"
 	"github.com/tsmask/go-oam/modules/state"
 	"github.com/tsmask/go-oam/modules/tool"
@@ -24,6 +25,8 @@ func RouteSetup(router gin.IRouter) {
 	state.SetupRoute(router)
 	// 上报模块
 	push.SetupRoute(router)
+	// 下发模块
+	pull.SetupRoute(router)
 }
 
 // RouteService 路由独立服务启动
