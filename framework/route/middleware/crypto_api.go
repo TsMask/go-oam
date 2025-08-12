@@ -7,14 +7,24 @@ import (
 	"io"
 	"strings"
 
-	"github.com/tsmask/go-oam/framework/config"
-	"github.com/tsmask/go-oam/framework/logger"
 	"github.com/tsmask/go-oam/framework/route/resp"
 	"github.com/tsmask/go-oam/framework/utils/crypto"
 	"github.com/tsmask/go-oam/framework/utils/parse"
 
 	"github.com/gin-gonic/gin"
 )
+
+// CryptoApiOpt 接口加解密配置
+type CryptoApiOpt struct {
+	// 接口加解密是否开启
+	Enable bool
+	// 对请求解密
+	RequestDecrypt bool
+	// 对响应加密
+	ResponseEncrypt bool
+	// 密钥32位字符串
+	KeyAES string
+}
 
 // CryptoApi 接口加解密
 //
@@ -23,17 +33,15 @@ import (
 // 参数表示：对请求解密，对响应加密
 //
 // 请将中间件放在最前置，对请求优先处理
-func CryptoApi(requestDecrypt, responseEncrypt bool) gin.HandlerFunc {
+func CryptoApi(opt CryptoApiOpt) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// 登录认证，默认打开
-		enable := parse.Boolean(config.Get("cryptoapi"))
-		if !enable {
+		if !opt.Enable {
 			c.Next()
 			return
 		}
 
 		// 请求解密时对请求data注入
-		if requestDecrypt {
+		if opt.RequestDecrypt {
 			method := c.Request.Method
 			contentType := c.ContentType()
 			contentDe := ""
@@ -57,10 +65,8 @@ func CryptoApi(requestDecrypt, responseEncrypt bool) gin.HandlerFunc {
 			}
 
 			// 解密-原数据加密前含16位长度iv
-			apiKey := config.Get("aes.apiKey").(string)
-			dataBodyStr, err := crypto.AESDecryptBase64(contentDe, apiKey)
+			dataBodyStr, err := crypto.AESDecryptBase64(contentDe, opt.KeyAES)
 			if err != nil {
-				logger.Errorf("CryptoApi decrypt err => %v", err)
 				c.JSON(422, resp.CodeMsg(422001, "decrypted data could not be parsed"))
 				c.Abort() // 停止执行后续的处理函数
 				return
@@ -82,7 +88,7 @@ func CryptoApi(requestDecrypt, responseEncrypt bool) gin.HandlerFunc {
 
 		// 响应加密时替换原有的响应体
 		var rbw *replaceBodyWriter
-		if responseEncrypt {
+		if opt.ResponseEncrypt {
 			rbw = &replaceBodyWriter{
 				body:           &bytes.Buffer{},
 				ResponseWriter: c.Writer,
@@ -94,7 +100,7 @@ func CryptoApi(requestDecrypt, responseEncrypt bool) gin.HandlerFunc {
 		c.Next()
 
 		// 响应加密时对响应data数据进行加密
-		if responseEncrypt {
+		if opt.ResponseEncrypt {
 			// 满足成功并带数据的响应进行加密
 			if c.Writer.Status() == 200 {
 				var resBody map[string]any
@@ -105,18 +111,19 @@ func CryptoApi(requestDecrypt, responseEncrypt bool) gin.HandlerFunc {
 					if parse.Number(codeV) == resp.CODE_SUCCESS {
 						byteBodyData, _ := json.Marshal(dataV)
 						// 加密-原数据头加入标记16位长度iv终止符
-						apiKey := config.Get("aes.apiKey").(string)
-						contentEn, err := crypto.AESEncryptBase64("=:)"+string(byteBodyData), apiKey)
+						contentEn, err := crypto.AESEncryptBase64("=:)"+string(byteBodyData), opt.KeyAES)
 						if err != nil {
-							logger.Errorf("CryptoApi encrypt err => %v", err)
 							rbw.ReplaceWrite([]byte(fmt.Sprintf(`{"code":"%d","msg":"encrypt err"}`, resp.CODE_ERROR)))
 						} else {
 							// 响应加密
-							byteBody, _ := json.Marshal(map[string]any{
+							byteBody, err := json.Marshal(map[string]any{
 								"code": resp.CODE_ENCRYPT,
 								"msg":  resp.MSG_ENCRYPT,
 								"data": contentEn,
 							})
+							if err != nil {
+								rbw.ReplaceWrite([]byte(fmt.Sprintf(`{"code":"%d","msg":"encrypt err"}`, resp.CODE_ERROR)))
+							}
 							rbw.ReplaceWrite(byteBody)
 						}
 					}

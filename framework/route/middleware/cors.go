@@ -4,13 +4,51 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/tsmask/go-oam/framework/config"
-
 	"github.com/gin-gonic/gin"
 )
 
+// CorsOpt 跨域配置
+type CorsOpt struct {
+	// 设置 Access-Control-Allow-Origin 的值 例如：http://go-oam.org
+	// 如果请求设置了 credentials，则 origin 不能设置为 *
+	Origin string
+	// 设置 Access-Control-Allow-Credentials
+	Credentials bool
+	// 设置 Access-Control-Max-Age
+	MaxAge int
+	// 允许跨域的方法
+	AllowMethods []string
+	// 设置 Access-Control-Allow-Headers 的值
+	AllowHeaders []string
+	// 设置 Access-Control-Expose-Headers 的值
+	ExposeHeaders []string
+}
+
+// CorsDefaultOpt 默认跨域配置
+var CorsDefaultOpt = CorsOpt{
+	Origin:       "*",
+	Credentials:  true,
+	MaxAge:       31536000,
+	AllowMethods: []string{"OPTIONS", "GET", "HEAD", "PUT", "POST", "DELETE", "PATCH"},
+	AllowHeaders: []string{
+		"X-App-Code",
+		"X-App-Version",
+		"X-Requested-With",
+		"Authorization",
+		"Origin",
+		"Content-Type",
+		"Content-Language",
+		"Accept-Language",
+		"Accept",
+		"Range",
+	},
+	ExposeHeaders: []string{
+		"X-RepeatSubmit-Rest",
+	},
+}
+
 // Cors 跨域
-func Cors() gin.HandlerFunc {
+func Cors(opt CorsOpt) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 设置Vary头部
 		c.Header("Vary", "Origin")
@@ -23,12 +61,12 @@ func Cors() gin.HandlerFunc {
 		}
 
 		origin := requestOrigin
-		if v := config.Get("cors.origin"); v != nil {
-			origin = v.(string)
+		if v := opt.Origin; v != "" {
+			origin = v
 		}
 		c.Header("Access-Control-Allow-Origin", origin)
 
-		if v := config.Get("cors.credentials"); v != nil && v.(bool) {
+		if opt.Credentials {
 			c.Header("Access-Control-Allow-Credentials", "true")
 		}
 
@@ -41,27 +79,23 @@ func Cors() gin.HandlerFunc {
 			}
 
 			// 响应最大时间值
-			if v := config.Get("cors.maxAge"); v != nil && v.(int) > 10000 {
+			if v := opt.MaxAge; v > 10000 {
 				c.Header("Access-Control-Max-Age", fmt.Sprint(v))
 			}
 
 			// 允许方法
-			if v := config.Get("cors.allowMethods"); v != nil {
+			if v := opt.AllowMethods; len(v) > 0 {
 				var allowMethods = make([]string, 0)
-				for _, s := range v.([]any) {
-					allowMethods = append(allowMethods, s.(string))
-				}
+				allowMethods = append(allowMethods, v...)
 				c.Header("Access-Control-Allow-Methods", strings.Join(allowMethods, ","))
 			} else {
 				c.Header("Access-Control-Allow-Methods", "GET,HEAD,PUT,POST,DELETE,PATCH")
 			}
 
 			// 允许请求头
-			if v := config.Get("cors.allowHeaders"); v != nil {
+			if v := opt.AllowHeaders; len(v) > 0 {
 				var allowHeaders = make([]string, 0)
-				for _, s := range v.([]any) {
-					allowHeaders = append(allowHeaders, s.(string))
-				}
+				allowHeaders = append(allowHeaders, v...)
 				c.Header("Access-Control-Allow-Headers", strings.Join(allowHeaders, ","))
 			}
 
@@ -70,11 +104,9 @@ func Cors() gin.HandlerFunc {
 		}
 
 		// 暴露请求头
-		if v := config.Get("cors.exposeHeaders"); v != nil {
+		if v := opt.ExposeHeaders; len(v) > 0 {
 			var exposeHeaders = make([]string, 0)
-			for _, s := range v.([]any) {
-				exposeHeaders = append(exposeHeaders, s.(string))
-			}
+			exposeHeaders = append(exposeHeaders, v...)
 			c.Header("Access-Control-Expose-Headers", strings.Join(exposeHeaders, ","))
 		}
 

@@ -3,27 +3,21 @@ package security
 import (
 	"net/url"
 
-	"github.com/tsmask/go-oam/framework/config"
 	"github.com/tsmask/go-oam/framework/route/resp"
 
 	"github.com/gin-gonic/gin"
 )
 
 // referer 配置 referer 的 host 部分
-func referer(c *gin.Context) {
-	enable := false
-	if v := config.Get("security.csrf.enable"); v != nil {
-		enable = v.(bool)
-	}
-	if !enable {
+func referer(c *gin.Context, opt CSRF) {
+	if !opt.Enable {
 		return
 	}
 
 	// csrf 校验类型
 	okType := false
-	if v := config.Get("security.csrf.type"); v != nil {
-		vType := v.(string)
-		if vType == "all" || vType == "any" || vType == "referer" {
+	if v := opt.Type; v != "" {
+		if v == "all" || v == "any" || v == "referer" {
 			okType = true
 		}
 	}
@@ -43,7 +37,7 @@ func referer(c *gin.Context) {
 	referer := c.GetHeader("Referer")
 	if referer == "" {
 		// 无效 Referer 未知
-		c.AbortWithStatusJSON(200, resp.ErrMsg("Invalid referer unknown"))
+		c.AbortWithStatusJSON(200, resp.ErrMsg("invalid referer unknown"))
 		return
 	}
 
@@ -51,18 +45,14 @@ func referer(c *gin.Context) {
 	u, err := url.Parse(referer)
 	if err != nil {
 		// 无效 Referer 未知
-		c.AbortWithStatusJSON(200, resp.ErrMsg("Invalid referer unknown"))
+		c.AbortWithStatusJSON(200, resp.ErrMsg("invalid referer unknown"))
 		return
 	}
 	host := u.Host
 
 	// 允许的来源白名单
 	refererWhiteList := make([]string, 0)
-	if v := config.Get("security.csrf.refererWhiteList"); v != nil {
-		for _, s := range v.([]any) {
-			refererWhiteList = append(refererWhiteList, s.(string))
-		}
-	}
+	refererWhiteList = append(refererWhiteList, opt.RefererWhiteList...)
 
 	// 遍历检查
 	ok := false
@@ -73,7 +63,7 @@ func referer(c *gin.Context) {
 	}
 	if !ok {
 		// 无效 Referer
-		c.AbortWithStatusJSON(200, resp.ErrMsg("Invalid referer "+host))
+		c.AbortWithStatusJSON(200, resp.ErrMsg("invalid referer "+host))
 		return
 	}
 }

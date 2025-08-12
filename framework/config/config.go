@@ -28,16 +28,6 @@ func RunTime() time.Time {
 	return conf.GetTime("runTime")
 }
 
-// Enable 是否开启OAM
-func Enable() bool {
-	return conf.GetBool("enable")
-}
-
-// Dev 运行模式
-func Dev() bool {
-	return conf.GetBool("dev")
-}
-
 // LicenseDaysLeft 网元License剩余天数，小于0是过期
 func LicenseDaysLeft() int64 {
 	expire := conf.GetString("ne.expiryDate")
