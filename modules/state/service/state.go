@@ -30,26 +30,30 @@ type State struct{}
 
 // Info 系统信息
 func (s *State) Info() model.State {
-	version := fmt.Sprint(config.Get("ne.version"))
-	serialNum := fmt.Sprint(config.Get("ne.serialNum"))
-	expiryDate := fmt.Sprint(config.Get("ne.expiryDate"))
-	capability := parse.Number(config.Get("ne.ueNumber"))
-	standby := callback.Standby()
-	hostName, _ := os.Hostname()
-	memUsage, cpuUsage := getMemAndCPUUsage()
 	state := model.State{
-		HostName:   hostName,
-		OsInfo:     getUnameStr(),
-		IpAddr:     getIPAddr(),
-		Version:    version,
-		Capability: capability,
-		SerialNum:  serialNum,
-		ExpiryDate: expiryDate,
-		Standby:    standby,
-		CpuUsage:   cpuUsage,
-		MemUsage:   memUsage,
-		DiskSpace:  getDiskSpace(),
+		OsInfo:    getUnameStr(),
+		IpAddr:    getIPAddr(),
+		Standby:   callback.Standby(),
+		DiskSpace: getDiskSpace(),
 	}
+
+	neConf, ok := config.Get("ne").(map[string]any)
+	if ok {
+		state.Version = fmt.Sprint(neConf["version"])
+		state.SerialNum = fmt.Sprint(neConf["serialnum"])
+		state.ExpiryDate = fmt.Sprint(neConf["expirydate"])
+		state.Capability = parse.Number(neConf["uenumber"])
+	}
+
+	hostName, err := os.Hostname()
+	if err != nil {
+		hostName = ""
+	}
+	state.HostName = hostName
+
+	memUsage, cpuUsage := getMemAndCPUUsage()
+	state.CpuUsage = cpuUsage
+	state.MemUsage = memUsage
 	return state
 }
 

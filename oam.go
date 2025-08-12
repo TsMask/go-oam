@@ -83,7 +83,7 @@ func (o *Opts) RouteAdd(setup func(gin.IRouter)) {
 // 经过New初始后启动OAM服务
 func (o *Opts) Run() error {
 	if config.RunTime().IsZero() {
-		return fmt.Errorf("config not init")
+		return fmt.Errorf("[OAM] config not init")
 	}
 	// 启动的监听地址
 	if o.ListenArr != nil {

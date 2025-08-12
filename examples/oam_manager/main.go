@@ -56,3 +56,8 @@ func (o *oamCallback) Telent(command string) string {
 func (o *oamCallback) SNMP(oid, operType string, value any) any {
 	return "SNMP implements"
 }
+
+// Config implements callback.CallbackHandler.
+func (o *oamCallback) Config(action, paramName, loc string, paramValue any) error {
+	return fmt.Errorf("config => %s > %s > %s > %v", action, paramName, loc, paramValue)
+}

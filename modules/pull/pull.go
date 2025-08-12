@@ -15,4 +15,14 @@ func SetupRoute(router gin.IRouter) {
 		omcGroup.GET("/link", omc.LinkGet)
 		omcGroup.PUT("/link", omc.LinkSet)
 	}
+
+	// 网元配置路由
+	config := controller.NewConfig
+	configGroup := router.Group("/pull/config")
+	{
+		configGroup.GET("", config.Info)
+		configGroup.PUT("", config.Edit)
+		configGroup.POST("", config.Add)
+		configGroup.DELETE("", config.Remove)
+	}
 }
