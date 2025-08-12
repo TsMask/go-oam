@@ -1,7 +1,6 @@
 package state
 
 import (
-	"github.com/tsmask/go-oam/framework/logger"
 	"github.com/tsmask/go-oam/modules/state/controller"
 
 	"github.com/gin-gonic/gin"
@@ -9,8 +8,6 @@ import (
 
 // 模块路由注册
 func SetupRoute(router gin.IRouter) {
-	logger.Infof("开始加载 ====> state 模块路由")
-
 	// 网元状态
 	state := controller.NewState
 	router.GET("/state/standby", state.Standby)

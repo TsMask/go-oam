@@ -3,14 +3,11 @@ package push
 import (
 	"github.com/gin-gonic/gin"
 
-	"github.com/tsmask/go-oam/framework/logger"
 	"github.com/tsmask/go-oam/modules/push/controller"
 )
 
 // 模块路由注册
 func SetupRoute(router gin.IRouter) {
-	logger.Infof("开始加载 ====> push 模块路由")
-
 	// 告警路由
 	alarm := controller.NewAlarm
 	alarmGroup := router.Group("/push/alarm")

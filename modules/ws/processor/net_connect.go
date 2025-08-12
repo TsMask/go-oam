@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/tsmask/go-oam/framework/logger"
 	"github.com/tsmask/go-oam/modules/ws/model"
 
 	"github.com/shirou/gopsutil/v4/net"
@@ -16,10 +15,9 @@ import (
 func GetNetConnections(data any) ([]model.NetConnectData, error) {
 	msgByte, _ := json.Marshal(data)
 	var query model.NetConnectQuery
-	err := json.Unmarshal(msgByte, &query)
-	if err != nil {
-		logger.Warnf("ws processor GetNetConnections err: %s", err.Error())
-		return nil, fmt.Errorf("query data structure error")
+	if err := json.Unmarshal(msgByte, &query); err != nil {
+		return nil, fmt.Errorf("query data structure error, %s", err.Error())
+
 	}
 
 	dataArr := []model.NetConnectData{}
@@ -56,5 +54,5 @@ func GetNetConnections(data any) ([]model.NetConnectData, error) {
 		}
 	}
 
-	return dataArr, err
+	return dataArr, nil
 }

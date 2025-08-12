@@ -3,7 +3,6 @@ package controller
 import (
 	"fmt"
 
-	"github.com/tsmask/go-oam/framework/logger"
 	"github.com/tsmask/go-oam/framework/route/resp"
 	"github.com/tsmask/go-oam/framework/ws"
 	"github.com/tsmask/go-oam/modules/ws/service"
@@ -26,14 +25,14 @@ type WSController struct{}
 //	@Tags			ws
 //	@Accept			json
 //	@Produce		json
-//	@Param			neUid	query		string	false	"网元唯一标识"
+//	@Param			bindUid	query		string	false	"绑定唯一标识"
 //	@Success		200				{object}	object	"Response Results"
 //	@Summary		(ws://) Generic
 //	@Description	(ws://) Generic
 //	@Router			/ws [get]
 func (s *WSController) WS(c *gin.Context) {
 	var query struct {
-		NeUID string `form:"neUid"  binding:"required"` // 网元唯一标识
+		BindUID string `form:"bindUid"  binding:"required"` // 绑定唯一标识
 	}
 	if err := c.ShouldBindQuery(&query); err != nil {
 		errMsgs := fmt.Sprintf("bind err: %s", resp.FormatBindError(err))
@@ -42,7 +41,7 @@ func (s *WSController) WS(c *gin.Context) {
 	}
 
 	wsConn := ws.ServerConn{
-		BindUID: query.NeUID, // 绑定唯一标识ID
+		BindUID: query.BindUID, // 绑定唯一标识ID
 	}
 	// 将 HTTP 连接升级为 WebSocket 连接
 	if err := wsConn.Upgrade(c.Writer, c.Request); err != nil {
@@ -50,12 +49,8 @@ func (s *WSController) WS(c *gin.Context) {
 		return
 	}
 	defer wsConn.Close()
-	go wsConn.WriteListen(1, func(err error) {
-		logger.Errorf("ws WriteListen err: %s", err.Error())
-	})
-	go wsConn.ReadListen(1, func(err error) {
-		logger.Errorf("ws ReadListen err: %s", err.Error())
-	}, service.ReceiveCommont)
+	go wsConn.WriteListen(1, nil)
+	go wsConn.ReadListen(1, nil, service.ReceiveCommont)
 	// 发客户端id确认是否连接
 	wsConn.SendJSON(resp.OkData(map[string]string{
 		"clientId": wsConn.ClientId(),
@@ -66,9 +61,8 @@ func (s *WSController) WS(c *gin.Context) {
 	defer service.ClientRemove(&wsConn)
 
 	// 等待停止信号
-	for value := range wsConn.StopChan {
+	for range wsConn.StopChan {
 		wsConn.Close()
-		logger.Infof("ws Stop Client UID %s %s", wsConn.BindUID, value)
 		return
 	}
 }

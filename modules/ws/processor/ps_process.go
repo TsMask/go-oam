@@ -7,7 +7,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/tsmask/go-oam/framework/logger"
 	"github.com/tsmask/go-oam/modules/ws/model"
 
 	"github.com/shirou/gopsutil/v4/process"
@@ -17,14 +16,11 @@ import (
 func GetProcessData(data any) ([]model.PsProcessData, error) {
 	msgByte, _ := json.Marshal(data)
 	var query model.PsProcessQuery
-	err := json.Unmarshal(msgByte, &query)
-	if err != nil {
-		logger.Warnf("ws processor GetNetConnections err: %s", err.Error())
-		return nil, fmt.Errorf("query data structure error")
+	if err := json.Unmarshal(msgByte, &query); err != nil {
+		return nil, fmt.Errorf("query data structure error, %s", err.Error())
 	}
 
-	var processes []*process.Process
-	processes, err = process.Processes()
+	processes, err := process.Processes()
 	if err != nil {
 		return nil, err
 	}

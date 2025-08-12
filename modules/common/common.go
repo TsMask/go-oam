@@ -1,7 +1,6 @@
 package common
 
 import (
-	"github.com/tsmask/go-oam/framework/logger"
 	"github.com/tsmask/go-oam/modules/common/controller"
 
 	"github.com/gin-gonic/gin"
@@ -9,8 +8,6 @@ import (
 
 // 模块路由注册
 func SetupRoute(router gin.IRouter) {
-	logger.Infof("开始加载 ====> common 模块路由")
-
 	// 路由主页
 	router.GET("/i", controller.NewIndex.Handler)
 
