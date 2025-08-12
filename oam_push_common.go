@@ -54,7 +54,7 @@ func CommonPush(common *Common) error {
 	if omcInfo.Url == "" {
 		return fmt.Errorf("omc url is empty")
 	}
-	url := fmt.Sprintf("%s%s", omcInfo.Url, service.UENB_PUSH_URI)
+	url := fmt.Sprintf("%s%s", omcInfo.Url, service.COMMON_PUSH_URI)
 	common.NeUid = omcInfo.NeUID
 	return service.CommonPushURL(url, common)
 }
