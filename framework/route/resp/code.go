@@ -6,12 +6,8 @@ package resp
 // |200 |200999 |encrypt|正常请求加密数据|
 // |200 |200001 |request success|正常请求成功|
 // |200 |400001 |exist error|正常请求错误信息|
-// |200 |400002 |ratelimit over|请求限流|
 // |401 |401001 |authentication error|身份认证失败或者过期|
 // |401 |401002 |authentication invalid error|无效身份信息|
-// |401 |401003 |authorization token error|令牌字符为空|
-// |401 |401004 |device fingerprint mismatch|设备指纹信息不匹配|
-// |403 |403001 |permission error|权限未分配|
 // |422 |422001 |params error|参数接收解析错误|
 // |422 |422002 |params error|参数属性传入错误|
 

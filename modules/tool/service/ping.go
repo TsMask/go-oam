@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/tsmask/go-oam/framework/cmd"
-	"github.com/tsmask/go-oam/framework/logger"
 	"github.com/tsmask/go-oam/framework/ws"
 	"github.com/tsmask/go-oam/modules/tool/model"
 	wsModel "github.com/tsmask/go-oam/modules/ws/model"
@@ -112,8 +111,8 @@ func (s Ping) parseOptions(reqData any) (string, error) {
 		Timeout  int `json:"timeout"`  //  time to wait for response
 	}
 	if err := json.Unmarshal(msgByte, &data); err != nil {
-		logger.Warnf("ws processor parseClient err: %s", err.Error())
-		return "", fmt.Errorf("query data structure error")
+		return "", fmt.Errorf("query data structure error, %s", err.Error())
+
 	}
 
 	command := []string{"ping"}

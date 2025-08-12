@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/tsmask/go-oam/framework/cmd"
-	"github.com/tsmask/go-oam/framework/logger"
 	"github.com/tsmask/go-oam/framework/ws"
 	wsModel "github.com/tsmask/go-oam/modules/ws/model"
 	wsService "github.com/tsmask/go-oam/modules/ws/service"
@@ -114,8 +113,8 @@ func (s IPerf) parseOptions(reqData any) (string, error) {
 		Bitrate  int    `json:"bitrate"`  //  以比特/秒为单位（0 表示无限制）
 	}
 	if err := json.Unmarshal(msgByte, &data); err != nil {
-		logger.Warnf("ws processor parseClient err: %s", err.Error())
-		return "", fmt.Errorf("query data structure error")
+		return "", fmt.Errorf("query data structure error, %s", err.Error())
+
 	}
 	if data.Version != "V3" && data.Version != "V2" {
 		return "", fmt.Errorf("query data version support V3 or V2")

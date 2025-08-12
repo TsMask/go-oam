@@ -27,13 +27,18 @@ type IndexController struct{}
 //	@Description	Root Route
 //	@Router			/i [get]
 func (s *IndexController) Handler(c *gin.Context) {
+	neConf, ok := config.Get("ne").(map[string]any)
+	if !ok {
+		c.JSON(200, resp.ErrMsg("ne config not found"))
+		return
+	}
 	c.JSON(200, resp.OkData(map[string]any{
-		"type":       config.Get("ne.type"),
-		"version":    config.Get("ne.version"),
-		"serialNum":  config.Get("ne.serialNum"),
-		"expiryDate": config.Get("ne.expiryDate"),
-		"ueNumber":   config.Get("ne.ueNumber"),
-		"nbNumber":   config.Get("ne.nbNumber"),
+		"type":       neConf["type"],
+		"version":    neConf["version"],
+		"serialNum":  neConf["serialnum"],
+		"expiryDate": neConf["expirydate"],
+		"ueNumber":   neConf["uenumber"],
+		"nbNumber":   neConf["nbnumber"],
 		"validDays":  config.LicenseDaysLeft(),
 	}))
 }
