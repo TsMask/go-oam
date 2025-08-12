@@ -65,7 +65,7 @@ func (s SSHController) Command(c *gin.Context) {
 //	@Tags			tool/SSH
 //	@Accept			json
 //	@Produce		json
-//	@Param			neUid			query		string	true	"网元唯一标识"						default(001)
+//	@Param			bindUid			query		string	true	"绑定唯一标识"						default(001)
 //	@Param			cols			query		number	false	"Terminal line characters"	default(120)
 //	@Param			rows			query		number	false	"Terminal display lines"	default(40)
 //	@Param			access_token	query		string	true	"Authorization"
@@ -76,14 +76,20 @@ func (s SSHController) Command(c *gin.Context) {
 //	@Router			/tool/ssh/session [get]
 func (s SSHController) Session(c *gin.Context) {
 	var query struct {
-		NeUID string `form:"neUid"  binding:"required"` // 网元唯一标识
-		Cols  int    `form:"cols"`                      // 终端单行字符数
-		Rows  int    `form:"rows"`                      // 终端显示行数
+		BindUID string `form:"bindUid"  binding:"required"` // 绑定唯一标识
+		Cols    int    `form:"cols"`                        // 终端单行字符数
+		Rows    int    `form:"rows"`                        // 终端显示行数
 	}
 	if err := c.ShouldBindQuery(&query); err != nil {
 		errMsgs := fmt.Sprintf("bind err: %s", resp.FormatBindError(err))
 		c.JSON(422, resp.CodeMsg(resp.CODE_PARAM_PARSER, errMsgs))
 		return
+	}
+	if query.Cols == 0 {
+		query.Cols = 120
+	}
+	if query.Rows == 0 {
+		query.Rows = 40
 	}
 
 	//  连接会话
@@ -95,7 +101,7 @@ func (s SSHController) Session(c *gin.Context) {
 	defer clientSession.Close()
 
 	wsConn := ws.ServerConn{
-		BindUID: query.NeUID, // 绑定唯一标识ID
+		BindUID: query.BindUID, // 绑定唯一标识ID
 	}
 	// 将 HTTP 连接升级为 WebSocket 连接
 	if err := wsConn.Upgrade(c.Writer, c.Request); err != nil {

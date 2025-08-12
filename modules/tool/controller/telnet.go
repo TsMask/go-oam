@@ -57,7 +57,7 @@ func (s TelnetController) Command(c *gin.Context) {
 //	@Tags			tool/telnet
 //	@Accept			json
 //	@Produce		json
-//	@Param			neUid			query		string	true	"网元唯一标识"						default(001)
+//	@Param			bindUid			query		string	true	"绑定唯一标识"						default(001)
 //	@Success		200				{object}	object	"Response Results"
 //	@Security		TokenAuth
 //	@Summary		(ws://) Telnet endpoint session
@@ -65,7 +65,7 @@ func (s TelnetController) Command(c *gin.Context) {
 //	@Router			/tool/telnet/session [get]
 func (s TelnetController) Session(c *gin.Context) {
 	var query struct {
-		NeUID string `form:"neUid"  binding:"required"` // 网元唯一标识
+		BindUID string `form:"bindUid"  binding:"required"` // 绑定唯一标识
 	}
 	if err := c.ShouldBindQuery(&query); err != nil {
 		errMsgs := fmt.Sprintf("bind err: %s", resp.FormatBindError(err))
@@ -74,7 +74,7 @@ func (s TelnetController) Session(c *gin.Context) {
 	}
 
 	wsConn := ws.ServerConn{
-		BindUID: query.NeUID, // 绑定唯一标识ID
+		BindUID: query.BindUID, // 绑定唯一标识ID
 	}
 	// 将 HTTP 连接升级为 WebSocket 连接
 	if err := wsConn.Upgrade(c.Writer, c.Request); err != nil {
