@@ -6,6 +6,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -21,17 +22,17 @@ const DEFAULT_FILE_NAME_LENGTH = 100
 
 // 最大上传文件大小
 func uploadFileSize() int64 {
-	fileSize := 1 * 1024 * 1024
-	size := config.Get("upload.fileSize").(int)
+	var fileSize int64 = 1 * 1024 * 1024
+	size := parse.Number(config.Get("upload.filesize"))
 	if size > 1 {
 		fileSize = size * 1024 * 1024
 	}
-	return int64(fileSize)
+	return fileSize
 }
 
 // 上传文件资源路径
 func uploadFileDir() string {
-	fileDir := fmt.Sprint(config.Get("upload.fileDir"))
+	fileDir := fmt.Sprint(config.Get("upload.filedir"))
 	if fileDir == "" || fileDir == "<nil>" {
 		fileDir = "/tmp"
 	}
@@ -40,7 +41,10 @@ func uploadFileDir() string {
 
 // 文件上传扩展名白名单
 func uploadWhiteList() []string {
-	arr := config.Get("upload.whitelist").([]any)
+	arr, ok := config.Get("upload.whitelist").([]any)
+	if !ok {
+		return []string{}
+	}
 	strings := make([]string, len(arr))
 	for i, val := range arr {
 		if str, ok := val.(string); ok {
@@ -91,13 +95,13 @@ func isAllowWrite(fileName string, allowExts []string, fileSize int64) error {
 	if len(allowExts) == 0 {
 		allowExts = uploadWhiteList()
 	}
-	for _, ext := range allowExts {
-		if ext == fileExt {
-			hasExt = true
-			break
-		}
+	if slices.Contains(allowExts, fileExt) {
+		hasExt = true
 	}
 	if !hasExt {
+		if len(allowExts) == 0 {
+			return fmt.Errorf("the upload file type is not supported")
+		}
 		return fmt.Errorf("the upload file type is not supported, only the following types are supported: %s", strings.Join(allowExts, ","))
 	}
 

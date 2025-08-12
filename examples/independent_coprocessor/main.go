@@ -20,7 +20,6 @@ func main() {
 		defer wg.Done()
 
 		o := oam.New(&oam.Opts{
-			Dev: true,
 			License: oam.License{
 				NeType:     "NE",
 				Version:    "1.0",

@@ -30,8 +30,8 @@ func RouteSetup(router gin.IRouter) {
 }
 
 // RouteService 路由独立服务启动
-func RouteService(dev bool, setupArr []func(gin.IRouter)) error {
-	router := route.Engine(dev)
+func RouteService(setupArr []func(gin.IRouter)) error {
+	router := route.Engine()
 	// 装载外部拓展
 	if len(setupArr) > 0 {
 		for _, setup := range setupArr {

@@ -8,24 +8,21 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/tsmask/go-oam/framework/config"
-	"github.com/tsmask/go-oam/framework/logger"
 	"github.com/tsmask/go-oam/framework/route/middleware"
 	"github.com/tsmask/go-oam/framework/route/middleware/security"
 )
 
 // Engine 初始HTTP路由引擎
-func Engine(dev bool) *gin.Engine {
-	var app *gin.Engine
-
-	// 根据运行环境注册引擎
-	if !dev {
-		gin.SetMode(gin.ReleaseMode)
-		app = gin.New()
-		app.Use(gin.Recovery())
-	} else {
-		app = gin.Default()
-	}
-
+func Engine() *gin.Engine {
+	gin.SetMode(gin.ReleaseMode)
+	app := gin.New()
+	app.Use(gin.Recovery())
+	// 注册中间件
+	app.Use(
+		middleware.ErrorCatch(),
+		middleware.Cors(middleware.CorsDefaultOpt),
+		security.Security(security.SecurityDefaultOpt),
+	)
 	// 路由未找到时
 	app.NoRoute(func(c *gin.Context) {
 		c.JSON(404, gin.H{
@@ -33,14 +30,6 @@ func Engine(dev bool) *gin.Engine {
 			"msg":  fmt.Sprintf("Not Found %s %s", c.Request.Method, c.Request.RequestURI),
 		})
 	})
-
-	// 注册中间件
-	app.Use(
-		middleware.ErrorCatch(),
-		middleware.Cors(),
-		security.Security(),
-	)
-
 	// 禁止控制台日志输出的颜色
 	gin.DisableConsoleColor()
 	app.ForwardedByClientIP = true
@@ -70,9 +59,9 @@ func Run(router *gin.Engine) error {
 				defer wg.Done()
 				for i := range 10 {
 					if err := router.RunTLS(addr, certFile, keyFile); err != nil {
-						logger.Errorf("route run tls err:%v", err)
+						fmt.Printf("[OAM] route run tls error => %v\n", err)
 						time.Sleep(10 * time.Second) // 重试间隔时间
-						logger.Warnf("trying to restart HTTPS server on %s (Attempt %d)", address, i)
+						fmt.Printf("[OAM] trying to restart HTTPS server on %s (Attempt %d)\n", address, i)
 					}
 				}
 			}(address, certFile, keyFile)
@@ -83,15 +72,15 @@ func Run(router *gin.Engine) error {
 				defer wg.Done()
 				for i := range 10 {
 					if err := router.Run(address); err != nil {
-						logger.Errorf("route run err:%v", err)
+						fmt.Printf("[OAM] route run error => %v\n", err)
 						time.Sleep(10 * time.Second) // 重试间隔时间
-						logger.Warnf("trying to restart HTTP server on %s (Attempt %d)", address, i)
+						fmt.Printf("[OAM] trying to restart HTTP server on %s (Attempt %d)\n", address, i)
 					}
 				}
 			}(address)
 		}
 	}
 	wg.Wait()
-	logger.Warnf("route http server stop")
+	fmt.Println("route server stop")
 	return nil
 }

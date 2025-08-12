@@ -2,28 +2,13 @@ package oam
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/tsmask/go-oam/framework/config"
-	"github.com/tsmask/go-oam/framework/logger"
 	"github.com/tsmask/go-oam/modules"
 	"github.com/tsmask/go-oam/modules/callback"
-	pullModel "github.com/tsmask/go-oam/modules/pull/model"
-	pullService "github.com/tsmask/go-oam/modules/pull/service"
 )
-
-// OMC 网管信息
-type OMC = pullModel.OMC
-
-// Listen 路由HTTP服务监听配置
-type Listen struct {
-	Addr   string // 监听地址 格式：ip:port
-	Schema string // 监听协议 http/https
-	Cert   string // 证书文件路径，仅https协议需要
-	Key    string // 私钥文件路径，仅https协议需要
-}
 
 // License 网元传入
 type License struct {
@@ -35,12 +20,26 @@ type License struct {
 	UeNumber   int    // 终端限制数量 UDM
 }
 
+// Listen 路由HTTP服务监听配置
+type Listen struct {
+	Addr   string // 监听地址 格式：ip:port
+	Schema string // 监听协议 http/https
+	Cert   string // 证书文件路径，仅https协议需要
+	Key    string // 私钥文件路径，仅https协议需要
+}
+
+// Upload 文件上传配置
+type Upload struct {
+	FileDir   string   // 文件上传目录路径，默认：/tmp
+	FileSize  int      // 最大上传文件大小，单位MB，默认：1
+	Whitelist []string // 文件扩展名白名单
+}
+
 // Opts SDK参数
 type Opts struct {
-	Dev       bool                // 开发模式
-	ConfPath  string              // 启动的配置文件路径
 	License   License             // 网元License传入
 	ListenArr []Listen            // 启动的监听地址
+	Upload    Upload              // 文件上传配置
 	setupArr  []func(gin.IRouter) // 外部路由拓展
 }
 
@@ -48,18 +47,7 @@ type Opts struct {
 func New(o *Opts) *Opts {
 	// 配置参数
 	config.InitConfig()
-	config.Set("dev", o.Dev)
 	LicenseRrefresh(o.License)
-	if o.ConfPath != "" {
-		config.ReadExternalConfig(o.ConfPath)
-	}
-	// 程序日志
-	neTypeLower := strings.ToLower(fmt.Sprint(config.Get("ne.type")))
-	loggerConf, ok := config.Get("logger").(map[string]any)
-	if ok {
-		loggerConf["filename"] = fmt.Sprintf("%s_oam.log", neTypeLower)
-	}
-	logger.InitLogger()
 	return o
 }
 
@@ -72,7 +60,6 @@ func (o *Opts) SetupCallback(handler callback.CallbackHandler) {
 // RouteExpose 在已有Gin上使用
 // 经过New初始后暴露路由
 func (o *Opts) RouteExpose(router gin.IRouter) error {
-	defer logger.Close()
 	if config.RunTime().IsZero() {
 		return fmt.Errorf("config not init")
 	}
@@ -95,13 +82,8 @@ func (o *Opts) RouteAdd(setup func(gin.IRouter)) {
 // Run 独立运行OAM
 // 经过New初始后启动OAM服务
 func (o *Opts) Run() error {
-	defer logger.Close()
 	if config.RunTime().IsZero() {
 		return fmt.Errorf("config not init")
-	}
-	// 是否开启
-	if !config.Enable() {
-		return fmt.Errorf("oam is not enable")
 	}
 	// 启动的监听地址
 	if o.ListenArr != nil {
@@ -117,7 +99,7 @@ func (o *Opts) Run() error {
 		}
 		config.Set("route", listenArr)
 	}
-	return modules.RouteService(config.Dev(), o.setupArr)
+	return modules.RouteService(o.setupArr)
 }
 
 // LicenseRrefresh 刷新网元License信息
@@ -134,12 +116,17 @@ func LicenseRrefresh(lic License) {
 	neConf["uenumber"] = lic.UeNumber
 }
 
-// OMCInfoGet 网管信息获取
-func OMCInfoGet() OMC {
-	return pullService.OMCInfoGet()
-}
-
-// OMCInfoSet 网管信息设置
-func OMCInfoSet(info OMC) {
-	pullService.OMCInfoSet(info)
+// ConfigUpload 上传文件配置
+func ConfigUpload(uploadConfig Upload) {
+	upload, ok := config.Get("upload").(map[string]any)
+	if !ok {
+		return
+	}
+	upload["filedir"] = uploadConfig.FileDir
+	upload["filesize"] = uploadConfig.FileSize
+	list := make([]any, 0)
+	for _, v := range uploadConfig.Whitelist {
+		list = append(list, v)
+	}
+	upload["whitelist"] = list
 }

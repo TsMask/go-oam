@@ -12,8 +12,6 @@ import (
 // 独立运行
 func main() {
 	o := oam.New(&oam.Opts{
-		Dev:      true,
-		ConfPath: "./dev/oam.yaml",
 		License: oam.License{
 			NeType:     "NE",
 			Version:    "1.0",
@@ -121,6 +119,16 @@ func main() {
 			oam.KPIKeyInc("Test.A.02")
 			oam.KPIKeySet("Test.A.03", float64(t.Second()))
 
+			// 刷新授权
+			oam.LicenseRrefresh(oam.License{
+				NeType:     "NE",
+				Version:    "1.0",
+				SerialNum:  "1234567890",
+				ExpiryDate: "2025-12-31",
+				NbNumber:   t.Second(),
+				UeNumber:   t.Second(),
+			})
+
 			// 重置定时器，按指定周期执行
 			timer.Reset(duration)
 		}
@@ -141,6 +149,12 @@ func main() {
 		Url:     "http://192.168.5.58:29565",
 		NeUID:   "12345678",
 		CoreUID: "87654321",
+	})
+	// 上传文件配置
+	oam.ConfigUpload(oam.Upload{
+		FileDir:   "/usr/local/etc/oam/upload",
+		FileSize:  10,
+		Whitelist: []string{".txt", ".pdf", ".docx"},
 	})
 
 	o.RouteAdd(func(r gin.IRouter) {
