@@ -148,12 +148,13 @@ go-oam
 │   ├── tool                              目录-工具模块
 │   ├── ws                                目录-WS模块
 │   └── modules.go                        文件-加载模块
-├── oam_push_alarm.go                              文件-告警推送函数
-├── oam_push_cdr.go                                文件-话单推送函数
-├── oam_push_common.go                            文件-通用推送函数
-├── oam_push_kpi.go                                文件-KPI推送函数
-├── oam_push_nb_state.go                          文件-基站状态推送函数
-├── oam_push_ue_nb.go                              文件-UE与NB推送函数
+├── oam_pull_omc.go                       文件-下发函数OMC
+├── oam_push_alarm.go                     文件-推送函数告警
+├── oam_push_cdr.go                       文件-推送函数话单
+├── oam_push_common.go                    文件-推送函数通用
+├── oam_push_kpi.go                       文件-推送函数KPI
+├── oam_push_nb_state.go                  文件-推送函数基站状态
+├── oam_push_ue_nb.go                     文件-推送函数UENB
 ├── oam.go                                文件-库函数
 ├── LICENSE                               文件-许可证
 └──  README.md                            文件-项目说明
