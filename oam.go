@@ -16,8 +16,9 @@ type License struct {
 	Version    string // 版本号 格式：X.Y.Z
 	SerialNum  string // 序列号 8位字符
 	ExpiryDate string // 有效日期 格式：YYYY-MM-DD
-	NbNumber   int    // 基站限制数量，AMF MME
+	NbNumber   int    // 基站限制数量 AMF MME
 	UeNumber   int    // 终端限制数量 UDM
+	Pid        int    // 进程ID 外部运行时需要填，不填默认当前
 }
 
 // Listen 路由HTTP服务监听配置
@@ -47,7 +48,14 @@ type Opts struct {
 func New(o *Opts) *Opts {
 	// 配置参数
 	config.InitConfig()
-	LicenseRrefresh(o.License)
+	// 网元License传入
+	if o.License.NeType != "" {
+		LicenseRrefresh(o.License)
+	}
+	// 文件上传配置
+	if o.Upload.FileDir != "" {
+		ConfigUpload(o.Upload)
+	}
 	return o
 }
 
@@ -86,7 +94,7 @@ func (o *Opts) Run() error {
 		return fmt.Errorf("[OAM] config not init")
 	}
 	// 启动的监听地址
-	if o.ListenArr != nil {
+	if len(o.ListenArr) > 0 {
 		listenArr := make([]any, 0)
 		for _, v := range o.ListenArr {
 			item := map[string]any{
@@ -114,6 +122,7 @@ func LicenseRrefresh(lic License) {
 	neConf["expirydate"] = lic.ExpiryDate
 	neConf["nbnumber"] = lic.NbNumber
 	neConf["uenumber"] = lic.UeNumber
+	neConf["pid"] = lic.Pid
 }
 
 // ConfigUpload 上传文件配置

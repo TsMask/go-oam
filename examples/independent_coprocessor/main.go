@@ -23,7 +23,7 @@ func main() {
 			License: oam.License{
 				NeType:     "NE",
 				Version:    "1.0",
-				SerialNum:  "1234567890",
+				SerialNum:  "12345678",
 				ExpiryDate: "2025-12-31",
 				NbNumber:   10,
 				UeNumber:   100,
@@ -39,6 +39,11 @@ func main() {
 					Cert:   "./dev/certs/www.oam.net.crt",
 					Key:    "./dev/certs/www.oam.net.key",
 				},
+			},
+			Upload: oam.Upload{
+				FileDir:   "/usr/local/etc/oam/upload",
+				FileSize:  5,
+				Whitelist: []string{".txt", ".jpg", ".png"},
 			},
 		})
 		if err := o.Run(); err != nil {

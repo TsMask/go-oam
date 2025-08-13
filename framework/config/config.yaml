@@ -11,6 +11,7 @@ ne:
   expiryDate: "2000-01-01" # 过期时间
   nbNumber: 0 # 基站限制数量
   ueNumber: 0 # 终端限制数量
+  pid: 0 # 进程ID
 
 # OMC 网管信息
 omc:

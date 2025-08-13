@@ -37,21 +37,25 @@ func (s *State) Info() model.State {
 		DiskSpace: getDiskSpace(),
 	}
 
-	neConf, ok := config.Get("ne").(map[string]any)
-	if ok {
-		state.Version = fmt.Sprint(neConf["version"])
-		state.SerialNum = fmt.Sprint(neConf["serialnum"])
-		state.ExpiryDate = fmt.Sprint(neConf["expirydate"])
-		state.Capability = parse.Number(neConf["uenumber"])
-	}
-
 	hostName, err := os.Hostname()
 	if err != nil {
 		hostName = ""
 	}
 	state.HostName = hostName
 
-	memUsage, cpuUsage := getMemAndCPUUsage()
+	var pid int32 = 0
+	neConf, ok := config.Get("ne").(map[string]any)
+	if ok {
+		state.Version = fmt.Sprint(neConf["version"])
+		state.SerialNum = fmt.Sprint(neConf["serialnum"])
+		state.ExpiryDate = fmt.Sprint(neConf["expirydate"])
+		state.Capability = parse.Number(neConf["uenumber"])
+		pid = int32(parse.Number(neConf["pid"]))
+	}
+	if pid == 0 {
+		pid = int32(os.Getpid())
+	}
+	memUsage, cpuUsage := getMemAndCPUUsage(pid)
 	state.CpuUsage = cpuUsage
 	state.MemUsage = memUsage
 	return state
@@ -88,6 +92,7 @@ func getIPAddr() []string {
 	return ipAddrs
 }
 
+// getUnameStr Liunx uname -a
 func getUnameStr() string {
 	if runtime.GOOS == "windows" {
 		info, err := host.Info()
@@ -106,17 +111,11 @@ func getUnameStr() string {
 	return strings.TrimSpace(osInfo)
 }
 
-func getMemAndCPUUsage() (model.MemUsage, model.CpuUsage) {
+// getMemAndCPUUsage 获取进程的内存和CPU占用率
+func getMemAndCPUUsage(pid int32) (model.MemUsage, model.CpuUsage) {
 	m := model.MemUsage{}
-	checkPid := os.Getpid()
-	pProc, _ := process.NewProcess(int32(checkPid))
-	// self RAM(KB)
-	myRam, err := pProc.MemoryInfo()
-	if err != nil {
-		m.NfUsedMem = 0
-	} else {
-		m.NfUsedMem = myRam.RSS / 1024
-	}
+	c := model.CpuUsage{}
+
 	// system RAM(KB)
 	sysRam, err := mem.VirtualMemory()
 	if err != nil {
@@ -126,17 +125,8 @@ func getMemAndCPUUsage() (model.MemUsage, model.CpuUsage) {
 		m.TotalMem = sysRam.Total / 1024
 		m.SysMemUsage = uint64(sysRam.UsedPercent * 100)
 	}
-
-	c := model.CpuUsage{}
-	// self cpu percent
-	percent, err := pProc.CPUPercent()
-	if err != nil {
-		c.NfCpuUsage = 0
-	} else {
-		c.NfCpuUsage = uint16(percent * 100)
-	}
-	// sys cpu percent
-	totalPercent, err := cpu.Percent(20*time.Millisecond, false)
+	// system cpu percent
+	totalPercent, err := cpu.Percent(300*time.Millisecond, true)
 	if err != nil {
 		c.SysCpuUsage = 0
 	} else {
@@ -148,12 +138,33 @@ func getMemAndCPUUsage() (model.MemUsage, model.CpuUsage) {
 		avgPercent := sum / float64(len(totalPercent))
 		c.SysCpuUsage = uint16(avgPercent * 100)
 	}
+
+	// 根据PID取得进程资源
+	proc, err := process.NewProcess(pid)
+	if err != nil {
+		return m, c
+	}
+	// pid RAM(KB)
+	myRam, err := proc.MemoryInfo()
+	if err != nil {
+		m.NfUsedMem = 0
+	} else {
+		m.NfUsedMem = myRam.RSS / 1024
+	}
+	// pid cpu percent
+	percent, err := proc.CPUPercent()
+	if err != nil {
+		c.NfCpuUsage = 0
+	} else {
+		c.NfCpuUsage = uint16(percent * 100)
+	}
 	return m, c
 }
 
+// getDiskSpace 获取磁盘空间信息
 func getDiskSpace() model.DiskSpace {
 	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(ctx, 300*time.Millisecond)
 	defer cancel()
 
 	partitions, err := disk.PartitionsWithContext(ctx, false)
