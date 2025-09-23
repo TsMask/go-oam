@@ -33,15 +33,37 @@ const (
 
 type Alarm = model.Alarm
 
-// AlarmHistoryList 告警历史列表
-// 需要先调用 AlarmHistoryClearTimer 才会开启记录
-func AlarmHistoryList() []Alarm {
-	return service.AlarmHistoryList()
+// AlarmPush 告警推送
+// 默认URL地址：ALARM_PUSH_URI
+func AlarmPush(alarm *Alarm) error {
+	omcInfo := OMCInfoGet()
+	if omcInfo.Url == "" {
+		return fmt.Errorf("omc url is empty")
+	}
+	url := fmt.Sprintf("%s%s", omcInfo.Url, service.ALARM_PUSH_URI)
+	alarm.NeUid = omcInfo.NeUID
+	return service.AlarmPushURL(url, alarm)
 }
 
-// AlarmHistoryClearTimer 告警历史定时清除 数据保留一天，0点重新记录
-func AlarmHistoryClearTimer() {
-	service.AlarmHistoryClearTimer()
+// AlarmPushURL 告警推送 自定义URL地址接收
+func AlarmPushURL(url string, alarm *Alarm) error {
+	if url == "" {
+		return fmt.Errorf("url is empty")
+	}
+	return service.AlarmPushURL(url, alarm)
+}
+
+// AlarmHistoryList 告警历史列表
+// n 为返回的最大记录数，n<0返回空列表
+func AlarmHistoryList(n int) []Alarm {
+	return service.AlarmHistoryList(n)
+}
+
+// AlarmHistorySetSize 设置告警历史列表数量
+// 当设置的大小小于当前历史记录数时，会自动清理旧记录
+// 默认值 4096
+func AlarmHistorySetSize(size int) {
+	service.AlarmHistorySetSize(size)
 }
 
 // AlarmReceiveRoute 告警接收路由装载
@@ -60,21 +82,4 @@ func AlarmReceiveRoute(router gin.IRouter, onReceive func(Alarm) error) {
 		}
 		c.JSON(200, resp.Ok(nil))
 	})
-}
-
-// AlarmPushURL 告警推送 自定义URL地址接收
-func AlarmPushURL(url string, alarm *Alarm) error {
-	return service.AlarmPushURL(url, alarm)
-}
-
-// AlarmPush 告警推送
-// 默认URL地址：ALARM_PUSH_URI
-func AlarmPush(alarm *Alarm) error {
-	omcInfo := OMCInfoGet()
-	if omcInfo.Url == "" {
-		return fmt.Errorf("omc url is empty")
-	}
-	url := fmt.Sprintf("%s%s", omcInfo.Url, service.ALARM_PUSH_URI)
-	alarm.NeUid = omcInfo.NeUID
-	return service.AlarmPushURL(url, alarm)
 }

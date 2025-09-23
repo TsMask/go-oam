@@ -2,7 +2,10 @@ package service
 
 import (
 	"context"
+	"fmt"
+	"math"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/tsmask/go-oam/framework/fetch"
@@ -12,27 +15,27 @@ import (
 // KPI_PUSH_URI 指标推送URI地址 POST
 const KPI_PUSH_URI = "/push/kpi/receive"
 
-// kpiHistorys KPI历史 每小时重新记录，保留一小时
-var kpiHistorys []model.KPI = make([]model.KPI, 0)
+// float64互转uint64 精度控制，支持3位小数精度
+const precisionMultiplier = 1000
+
+var (
+	kpiHistorys           []model.KPI  // KPI历史记录
+	kpiHistorysMux        sync.RWMutex // 保护kpiHistorys的并发访问
+	kpiHistorysMaxSize    = 4096       // 最大历史记录数量
+	kpiHistorysMaxSizeMux sync.RWMutex // 保护修改数量的并发访问
+)
 
 // KPI 指标服务
 type KPI struct {
 	NeUid          string             // 网元唯一标识
 	Granularity    time.Duration      // 指标缓存时间粒度
-	data           sync.Map           // 指标缓存
+	data           sync.Map           // 存储string -> *atomic.Uint64
+	clearMutex     sync.Mutex         // 保护清空操作
 	kpiTimerCancel context.CancelFunc // KPI 定时发送取消函数
-}
 
-// kpiClearDuration 计算到下一个时间间隔
-func kpiClearDuration() time.Duration {
-	now := time.Now()
-	// 下一个整点
-	nextHour := time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+1, 0, 0, 0, now.Location())
-	return nextHour.Sub(now)
 }
 
 // KPITimerStart KPI定时发送
-// duration 为发送周期，单位为 time.Duration
 func (s *KPI) KPITimerStart(url string) {
 	// 先关闭当前定时器
 	s.KPITimerStop()
@@ -41,58 +44,25 @@ func (s *KPI) KPITimerStart(url string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	s.kpiTimerCancel = cancel
 
-	// 创建 KPI 发送定时器，在指定的周期后触发第一次执行
+	// 创建 KPI 发送定时器
 	kpiTimer := time.NewTimer(s.Granularity)
-	// 计算到下一个整点的时间间隔，创建历史记录清空定时器
-	historyClearTimer := time.NewTimer(kpiClearDuration())
 
 	go func() {
 		defer kpiTimer.Stop()
-		defer historyClearTimer.Stop()
 		for {
 			select {
 			case <-kpiTimer.C:
-				// 将 sync.Map 转换为 map[string]float64
-				dataMap := make(map[string]float64)
-				s.data.Range(func(key, value any) bool {
-					dataMap[key.(string)] = value.(float64)
-					return true
-				})
+				// 安全地获取当前数据
+				dataMap := s.safeGetAllData()
 				if len(dataMap) != 0 {
-					// 执行 KPI 发送操作
-					k := model.KPI{
-						NeUid:       s.NeUid, // 网元唯一标识
-						Granularity: int64(s.Granularity.Seconds()),
-						RecordTime:  time.Now().UnixMilli(),
-						Data:        dataMap,
+					if err := KPISend(url, s.NeUid, int64(s.Granularity.Seconds()), dataMap); err != nil {
+						fmt.Printf("KPI send failed, err: %v", err)
 					}
-
-					// 记录历史
-					kpiHistorys = append(kpiHistorys, k)
-					// 发送
-					fetch.PostJSON(url, k, nil)
 				}
 
-				// 清空 sync.Map
-				s.data = sync.Map{}
-				// 重置 KPI 定时器，按指定周期执行
+				// 安全地清空数据
+				s.safeClearData()
 				kpiTimer.Reset(s.Granularity)
-			case now := <-historyClearTimer.C:
-				// 计算小时前的起始时间戳
-				hourAgo := time.Date(now.Year(), now.Month(), now.Day(), now.Hour()-1, 0, 0, 0, now.Location()).UnixMilli()
-
-				// 过滤出最近小时的 KPI 记录
-				var recentHistory []model.KPI
-				for _, kpi := range kpiHistorys {
-					if kpi.RecordTime >= hourAgo {
-						recentHistory = append(recentHistory, kpi)
-					}
-				}
-				// 更新 kpiHistorys 为最近小时的记录
-				kpiHistorys = recentHistory
-
-				// 重置历史记录清空定时器，准备下一个整点
-				historyClearTimer.Reset(kpiClearDuration())
 			case <-ctx.Done():
 				return
 			}
@@ -108,12 +78,31 @@ func (s *KPI) KPITimerStop() {
 	}
 }
 
+// getOrCreateAtomicValue 获取或创建atomic值
+func (s *KPI) getOrCreateAtomicValue(key string) *atomic.Uint64 {
+	// 快速路径：尝试加载已存在的值
+	if val, ok := s.data.Load(key); ok {
+		return val.(*atomic.Uint64)
+	}
+
+	// 慢速路径：创建新的atomic值
+	newVal := &atomic.Uint64{}
+
+	// 使用LoadOrStore确保线程安全，防止重复创建
+	actual, _ := s.data.LoadOrStore(key, newVal)
+	return actual.(*atomic.Uint64)
+}
+
 // KeySet 对Key原子设置
 func (s *KPI) KeySet(key string, v float64) {
 	if s == nil {
 		return
 	}
-	s.data.Store(key, v)
+
+	// 将float64转换为uint64，使用放大因子保持精度
+	uintVal := uint64(v * precisionMultiplier)
+	atomicVal := s.getOrCreateAtomicValue(key)
+	atomicVal.Store(uintVal)
 }
 
 // KeyGet 对Key原子获取
@@ -121,31 +110,154 @@ func (s *KPI) KeyGet(key string) float64 {
 	if s == nil {
 		return 0
 	}
-	value, ok := s.data.Load(key)
+
+	val, ok := s.data.Load(key)
 	if !ok {
 		return 0
 	}
-	return value.(float64)
+
+	atomicVal := val.(*atomic.Uint64)
+	// 将uint64转换回float64
+	return float64(atomicVal.Load()) / precisionMultiplier
 }
 
-// KeyInc 对Key原子累加
+// KeyInc 对Key原子累加1
 func (s *KPI) KeyInc(key string) {
-	s.KeySet(key, s.KeyGet(key)+1)
+	if s == nil {
+		return
+	}
+
+	atomicVal := s.getOrCreateAtomicValue(key)
+	atomicVal.Add(precisionMultiplier)
 }
 
-// KeyDec 对Key原子累减
+// KeyDec 对Key原子累减1
 func (s *KPI) KeyDec(key string) {
-	s.KeySet(key, s.KeyGet(key)-1)
+	if s == nil {
+		return
+	}
+
+	atomicVal := s.getOrCreateAtomicValue(key)
+	atomicVal.Add(^uint64(precisionMultiplier - 1))
 }
 
-// KPIHistoryList KPI历史列表
-func KPIHistoryList() []model.KPI {
-	return kpiHistorys
+// KeyAdd 原子增加指定值
+func (s *KPI) KeyAdd(key string, delta float64) {
+	if s == nil {
+		return
+	}
+
+	atomicVal := s.getOrCreateAtomicValue(key)
+	deltaUint := uint64(math.Abs(delta * precisionMultiplier))
+
+	if delta >= 0 {
+		atomicVal.Add(deltaUint)
+	} else {
+		atomicVal.Add(^uint64(deltaUint - 1))
+	}
+}
+
+// KeyDel 删除指定的键
+func (s *KPI) KeyDel(key string) {
+	if s == nil {
+		return
+	}
+	s.data.Delete(key)
+}
+
+// safeGetAllData 线程安全地获取所有数据
+func (s *KPI) safeGetAllData() map[string]float64 {
+	dataMap := make(map[string]float64)
+	s.data.Range(func(key, value any) bool {
+		k := key.(string)
+		atomicVal := value.(*atomic.Uint64)
+		dataMap[k] = float64(atomicVal.Load()) / precisionMultiplier
+		return true
+	})
+	return dataMap
+}
+
+// safeClearData 线程安全地清空数据
+func (s *KPI) safeClearData() {
+	s.clearMutex.Lock()
+	defer s.clearMutex.Unlock()
+
+	// 遍历并删除所有键，避免赋值sync.Map
+	s.data.Range(func(key, _ any) bool {
+		s.data.Delete(key)
+		return true
+	})
+}
+
+// KPIHistoryList 线程安全地获取历史列表
+// n 为返回的最大记录数，n<0返回空列表 n=0返回所有记录
+func KPIHistoryList(n int) []model.KPI {
+	kpiHistorysMux.RLock()
+	defer kpiHistorysMux.RUnlock()
+
+	if n < 0 {
+		return []model.KPI{}
+	}
+
+	// 计算要返回的记录数量
+	historyLen := len(kpiHistorys)
+	startIndex := 0
+
+	// 仅当 n > 0 并且历史记录数大于 n 时才截取
+	if n > 0 && historyLen > n {
+		startIndex = historyLen - n
+	}
+
+	// 只复制需要的部分
+	result := make([]model.KPI, historyLen-startIndex)
+	copy(result, kpiHistorys[startIndex:])
+	return result
+}
+
+// KPIHistorySetSize 安全地修改最大历史记录数量
+// 如果新的最大数量小于当前记录数，会自动清理旧记录
+func KPIHistorySetSize(newSize int) {
+	if newSize <= 0 {
+		return // 无效的大小，不做任何修改
+	}
+
+	// 先更新最大记录数
+	kpiHistorysMaxSizeMux.Lock()
+	oldSize := kpiHistorysMaxSize
+	kpiHistorysMaxSize = newSize
+	kpiHistorysMaxSizeMux.Unlock()
+
+	// 如果新的最大数量小于旧的最大数量，可能需要清理历史记录
+	if newSize < oldSize {
+		kpiHistorysMux.Lock()
+		defer kpiHistorysMux.Unlock()
+		// 如果历史记录数超过最大允许数量，只保留最新的记录
+		if len(kpiHistorys) > kpiHistorysMaxSize {
+			kpiHistorys = kpiHistorys[len(kpiHistorys)-kpiHistorysMaxSize:]
+		}
+	}
+}
+
+// safeAppendHistory 线程安全地添加历史记录
+func safeAppendHistory(kpi model.KPI) {
+	kpiHistorysMux.Lock()
+	defer kpiHistorysMux.Unlock()
+
+	// 获取最大历史记录数
+	kpiHistorysMaxSizeMux.RLock()
+	maxSize := kpiHistorysMaxSize
+	kpiHistorysMaxSizeMux.RUnlock()
+
+	if len(kpiHistorys) >= maxSize {
+		// 如果超过，删除最旧的记录（索引为0的记录）
+		kpiHistorys = kpiHistorys[1:]
+	}
+
+	kpiHistorys = append(kpiHistorys, kpi)
 }
 
 // KPISend 发送KPI
 func KPISend(url, neUid string, granularity int64, dataMap map[string]float64) error {
-	// 执行 KPI 发送操作
 	k := model.KPI{
 		Data:        dataMap,
 		Granularity: granularity,
@@ -153,10 +265,8 @@ func KPISend(url, neUid string, granularity int64, dataMap map[string]float64) e
 		NeUid:       neUid,
 	}
 
-	// 记录历史
-	kpiHistorys = append(kpiHistorys, k)
+	safeAppendHistory(k)
 
-	// 发送
 	_, err := fetch.PostJSON(url, k, nil)
 	if err != nil {
 		return err

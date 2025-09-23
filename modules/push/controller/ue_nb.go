@@ -7,6 +7,7 @@ import (
 
 	"github.com/tsmask/go-oam/framework/route/resp"
 	"github.com/tsmask/go-oam/framework/utils/generate"
+	"github.com/tsmask/go-oam/framework/utils/parse"
 	"github.com/tsmask/go-oam/modules/push/model"
 	"github.com/tsmask/go-oam/modules/push/service"
 )
@@ -32,7 +33,8 @@ type UENBController struct{}
 //	@Description	UENB Server Information
 //	@Router			/ue/nb/history [get]
 func (s UENBController) History(c *gin.Context) {
-	data := service.UENBHistoryList()
+	n := parse.Number(c.Query("n"))
+	data := service.UENBHistoryList(int(n))
 	c.JSON(200, resp.OkData(data))
 }
 

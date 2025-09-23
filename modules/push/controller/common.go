@@ -7,6 +7,7 @@ import (
 
 	"github.com/tsmask/go-oam/framework/route/resp"
 	"github.com/tsmask/go-oam/framework/utils/generate"
+	"github.com/tsmask/go-oam/framework/utils/parse"
 	"github.com/tsmask/go-oam/modules/push/model"
 	"github.com/tsmask/go-oam/modules/push/service"
 )
@@ -37,7 +38,8 @@ func (s CommonController) History(c *gin.Context) {
 		c.JSON(200, resp.ErrMsg("type is required"))
 		return
 	}
-	data := service.CommonHistoryList(typeStr)
+	n := parse.Number(c.Query("n"))
+	data := service.CommonHistoryList(typeStr, int(n))
 	c.JSON(200, resp.OkData(data))
 }
 

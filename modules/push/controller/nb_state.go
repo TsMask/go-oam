@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/tsmask/go-oam/framework/route/resp"
+	"github.com/tsmask/go-oam/framework/utils/parse"
 	"github.com/tsmask/go-oam/modules/push/model"
 	"github.com/tsmask/go-oam/modules/push/service"
 )
@@ -32,7 +33,8 @@ type NBStateController struct{}
 //	@Description	NBState Server Information
 //	@Router			/push/nb/state/history [get]
 func (s NBStateController) History(c *gin.Context) {
-	data := service.NBStateHistoryList()
+	n := parse.Number(c.Query("n"))
+	data := service.NBStateHistoryList(int(n))
 	c.JSON(200, resp.OkData(data))
 }
 

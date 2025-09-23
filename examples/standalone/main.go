@@ -134,16 +134,6 @@ func main() {
 		}
 	}()
 
-	// 通用历史清除
-	oam.CommonHistoryClearTimer("test", 60*time.Minute)
-	// 告警历史清除
-	oam.AlarmHistoryClearTimer()
-	// UENB 终端接入基站历史清除
-	oam.UENBHistoryClearTimer()
-	// NBState 基站状态历史清除
-	oam.NBStateHistoryClearTimer()
-	// 话单历史清除
-	oam.CDRHistoryClearTimer()
 	// OMC 信息设置
 	oam.OMCInfoSet(oam.OMC{
 		Url:     "http://192.168.5.58:29565",

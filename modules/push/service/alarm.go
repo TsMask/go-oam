@@ -1,6 +1,7 @@
 package service
 
 import (
+	"sync"
 	"time"
 
 	"github.com/tsmask/go-oam/framework/fetch"
@@ -10,41 +11,79 @@ import (
 // ALARM_PUSH_URI 告警推送URI地址 POST
 const ALARM_PUSH_URI = "/push/alarm/receive"
 
-// alarmRecord 控制是否记录历史告警
-var alarmRecord bool = false
+var (
+	alarmHistorys           []model.Alarm // 告警历史记录
+	alarmHistorysMux        sync.RWMutex  // 保护alarmHistorys的并发访问
+	alarmHistorysMaxSize    = 4096        // 最大历史记录数量
+	alarmHistorysMaxSizeMux sync.RWMutex  // 保护修改数量的并发访问
+)
 
-// alarmHistorys 告警历史 数据保留一天，0点重新记录
-var alarmHistorys []model.Alarm = make([]model.Alarm, 0)
+// AlarmHistoryList 线程安全地获取历史列表
+// n 为返回的最大记录数，n<0返回空列表 n=0返回所有记录
+func AlarmHistoryList(n int) []model.Alarm {
+	alarmHistorysMux.RLock()
+	defer alarmHistorysMux.RUnlock()
 
-// alarmClearDuration 计算到下一个时间间隔
-func alarmClearDuration() time.Duration {
-	now := time.Now()
-	// 午夜（0点）
-	midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).AddDate(0, 0, 1)
-	return midnight.Sub(now)
+	if n < 0 {
+		return []model.Alarm{}
+	}
+
+	// 计算要返回的记录数量
+	historyLen := len(alarmHistorys)
+	startIndex := 0
+
+	// 仅当 n > 0 并且历史记录数大于 n 时才截取
+	if n > 0 && historyLen > n {
+		startIndex = historyLen - n
+	}
+
+	// 只复制需要的部分
+	result := make([]model.Alarm, historyLen-startIndex)
+	copy(result, alarmHistorys[startIndex:])
+	return result
 }
 
-// AlarmHistoryClearTimer 历史清除
-func AlarmHistoryClearTimer() {
-	// 启动时允许记录历史告警
-	alarmRecord = true
-	// 创建一个定时器，在计算出的时间后触发第一次执行
-	timer := time.NewTimer(alarmClearDuration())
+// safeAppendAlarmHistory 线程安全地添加告警历史记录
+func safeAppendAlarmHistory(alarm model.Alarm) {
+	alarmHistorysMux.Lock()
+	defer alarmHistorysMux.Unlock()
 
-	go func() {
-		for {
-			<-timer.C
-			// 执行清除操作
-			alarmHistorys = make([]model.Alarm, 0)
-			// 重置定时器
-			timer.Reset(alarmClearDuration())
+	// 获取最大历史记录数
+	alarmHistorysMaxSizeMux.RLock()
+	maxSize := alarmHistorysMaxSize
+	alarmHistorysMaxSizeMux.RUnlock()
+
+	if len(alarmHistorys) >= maxSize {
+		// 如果超过，删除最旧的记录（索引为0的记录）
+		alarmHistorys = alarmHistorys[1:]
+	}
+
+	alarmHistorys = append(alarmHistorys, alarm)
+}
+
+// AlarmHistorySetSize 安全地修改最大历史记录数量
+// 如果新的最大数量小于当前记录数，会自动清理旧记录
+func AlarmHistorySetSize(newSize int) {
+	if newSize <= 0 {
+		return // 无效的大小，不做任何修改
+	}
+
+	// 先更新最大记录数
+	alarmHistorysMaxSizeMux.Lock()
+	oldSize := alarmHistorysMaxSize
+	alarmHistorysMaxSize = newSize
+	alarmHistorysMaxSizeMux.Unlock()
+
+	// 如果新的最大数量小于旧的最大数量，可能需要清理历史记录
+	if newSize < oldSize {
+		alarmHistorysMux.Lock()
+		defer alarmHistorysMux.Unlock()
+
+		// 如果历史记录数超过最大允许数量，只保留最新的记录
+		if len(alarmHistorys) > alarmHistorysMaxSize {
+			alarmHistorys = alarmHistorys[len(alarmHistorys)-alarmHistorysMaxSize:]
 		}
-	}()
-}
-
-// AlarmHistoryList 历史列表
-func AlarmHistoryList() []model.Alarm {
-	return alarmHistorys
+	}
 }
 
 // AlarmPushURL 告警推送 自定义URL地址接收
@@ -52,9 +91,7 @@ func AlarmPushURL(url string, alarm *model.Alarm) error {
 	alarm.AlarmTime = time.Now().UnixMilli()
 
 	// 记录历史
-	if alarmRecord {
-		alarmHistorys = append(alarmHistorys, *alarm)
-	}
+	safeAppendAlarmHistory(*alarm)
 
 	// 发送
 	_, err := fetch.PostJSON(url, alarm, nil)

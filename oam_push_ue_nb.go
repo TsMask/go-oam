@@ -32,15 +32,37 @@ const (
 
 type UENB = model.UENB
 
-// UENBHistoryList 终端接入基站历史列表
-// 需要先调用 UENBHistoryClearTimer 才会开启记录
-func UENBHistoryList() []UENB {
-	return service.UENBHistoryList()
+// UENBPush 终端接入基站推送
+// 默认URL地址：UENB_PUSH_URI
+func UENBPush(uenb *UENB) error {
+	omcInfo := OMCInfoGet()
+	if omcInfo.Url == "" {
+		return fmt.Errorf("omc url is empty")
+	}
+	url := fmt.Sprintf("%s%s", omcInfo.Url, service.UENB_PUSH_URI)
+	uenb.NeUid = omcInfo.NeUID
+	return service.UENBPushURL(url, uenb)
 }
 
-// UENBHistoryClearTimer 终端接入基站历史定时清除 每小时重新记录，保留一小时
-func UENBHistoryClearTimer() {
-	service.UENBHistoryClearTimer()
+// UENBPushURL 终端接入基站推送 自定义URL地址接收
+func UENBPushURL(url string, uenb *UENB) error {
+	if url == "" {
+		return fmt.Errorf("url is empty")
+	}
+	return service.UENBPushURL(url, uenb)
+}
+
+// UENBHistoryList 终端接入基站历史列表
+// n 为返回的最大记录数，n<0返回空列表
+func UENBHistoryList(n int) []UENB {
+	return service.UENBHistoryList(n)
+}
+
+// UENBHistorySetSize 设置终端接入基站历史列表数量
+// 当设置的大小小于当前历史记录数时，会自动清理旧记录
+// 默认值 4096
+func UENBHistorySetSize(size int) {
+	service.UENBHistorySetSize(size)
 }
 
 // UENBReceiveRoute 终端接入基站接收路由装载
@@ -59,21 +81,4 @@ func UENBReceiveRoute(router gin.IRouter, onReceive func(UENB) error) {
 		}
 		c.JSON(200, resp.Ok(nil))
 	})
-}
-
-// UENBPushURL 终端接入基站推送 自定义URL地址接收
-func UENBPushURL(url string, uenb *UENB) error {
-	return service.UENBPushURL(url, uenb)
-}
-
-// UENBPush 终端接入基站推送
-// 默认URL地址：UENB_PUSH_URI
-func UENBPush(uenb *UENB) error {
-	omcInfo := OMCInfoGet()
-	if omcInfo.Url == "" {
-		return fmt.Errorf("omc url is empty")
-	}
-	url := fmt.Sprintf("%s%s", omcInfo.Url, service.UENB_PUSH_URI)
-	uenb.NeUid = omcInfo.NeUID
-	return service.UENBPushURL(url, uenb)
 }

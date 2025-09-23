@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/tsmask/go-oam/framework/route/resp"
+	"github.com/tsmask/go-oam/framework/utils/parse"
 	"github.com/tsmask/go-oam/modules/push/service"
 )
 
@@ -31,7 +32,8 @@ type KPIController struct{}
 //	@Description	KPI Server Information
 //	@Router			/kpi/history [get]
 func (s KPIController) History(c *gin.Context) {
-	data := service.KPIHistoryList()
+	n := parse.Number(c.Query("n"))
+	data := service.KPIHistoryList(int(n))
 	c.JSON(200, resp.OkData(data))
 }
 

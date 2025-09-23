@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/tsmask/go-oam/framework/route/resp"
+	"github.com/tsmask/go-oam/framework/utils/parse"
 	"github.com/tsmask/go-oam/modules/push/model"
 	"github.com/tsmask/go-oam/modules/push/service"
 )
@@ -31,7 +32,8 @@ type CDRController struct{}
 //	@Description	CDR Server Information
 //	@Router			/cdr/history [get]
 func (s CDRController) History(c *gin.Context) {
-	data := service.CDRHistoryList()
+	n := parse.Number(c.Query("n"))
+	data := service.CDRHistoryList(int(n))
 	c.JSON(200, resp.OkData(data))
 }
 
