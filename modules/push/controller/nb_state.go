@@ -62,13 +62,14 @@ func (s NBStateController) Test(c *gin.Context) {
 	}
 
 	nbState := model.NBState{
-		NeUid:      query.NeUID,            // 网元唯一标识
-		Address:    "192.168.101.112",      // 基站地址
-		DeviceName: "TestNB",               // 基站设备名称
-		State:      model.NB_STATE_OFF,     // 基站状态 ON/OFF
-		StateTime:  time.Now().UnixMilli(), // 基站状态时间
-		Name:       "TestName",             // 基站名称 网元标记
-		Position:   "TestPosition",         // 基站位置 网元标记
+		NeUid:      query.NeUID,                // 网元唯一标识
+		Address:    "192.168.101.112",          // 基站地址
+		DeviceName: "TestNB",                   // 基站设备名称
+		DeviceId:   int64(time.Now().Second()), // 基站设备ID
+		State:      model.NB_STATE_OFF,         // 基站状态 ON/OFF
+		StateTime:  time.Now().UnixMilli(),     // 基站状态时间
+		Name:       "TestName",                 // 基站名称 网元标记
+		Position:   "TestPosition",             // 基站位置 网元标记
 	}
 	err := service.NBStatePushURL(query.Url, &nbState)
 	if err != nil {

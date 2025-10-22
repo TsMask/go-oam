@@ -11,6 +11,7 @@ type NBState struct {
 	RecordTime int64  `json:"recordTime" binding:"required"`  // 记录时间 时间戳毫秒，Push时自动填充
 	Address    string `json:"address"  binding:"required"`    // 基站地址
 	DeviceName string `json:"deviceName"  binding:"required"` // 基站设备名称
+	DeviceId   int64  `json:"deviceId"  binding:"required"`   // 基站设备ID
 	State      string `json:"state"  binding:"required"`      // 基站状态 ON/OFF
 	StateTime  int64  `json:"stateTime"  binding:"required"`  // 基站状态时间 时间戳毫秒
 	Name       string `json:"name"  binding:"required"`       // 基站名称 网元标记
