@@ -25,61 +25,6 @@ func GetProcessData(data any) ([]model.PsProcessData, error) {
 		return nil, err
 	}
 
-	// 解析数据
-	handleData := func(proc *process.Process) (model.PsProcessData, bool) {
-		procData := model.PsProcessData{
-			PID: proc.Pid,
-		}
-		if procName, err := proc.Name(); err == nil {
-			procData.Name = procName
-		}
-		if username, err := proc.Username(); err == nil {
-			procData.Username = username
-		}
-
-		// 查询过滤
-		if query.PID > 0 && procData.PID != query.PID {
-			return procData, false
-		}
-		if query.Name != "" && !strings.Contains(procData.Name, query.Name) {
-			return procData, false
-		}
-		if query.Username != "" && !strings.Contains(procData.Username, query.Username) {
-			return procData, false
-		}
-
-		procData.PPID, _ = proc.Ppid()
-		if statusArray, err := proc.Status(); err == nil && len(statusArray) > 0 {
-			procData.Status = strings.Join(statusArray, ",")
-		}
-		if createTime, err := proc.CreateTime(); err == nil {
-			procData.StartTime = createTime
-		}
-		procData.NumThreads, _ = proc.NumThreads()
-		if connections, err := proc.Connections(); err == nil {
-			procData.NumConnections = len(connections)
-		}
-		cpuPercent, _ := proc.CPUPercent()
-		procData.CpuPercent = fmt.Sprintf("%.2f", cpuPercent)
-		menInfo, procErr := proc.MemoryInfo()
-		if procErr == nil {
-			procData.Rss = menInfo.RSS
-			procData.Data = menInfo.Data
-			procData.VMS = menInfo.VMS
-			procData.HWM = menInfo.HWM
-			procData.Stack = menInfo.Stack
-			procData.Locked = menInfo.Locked
-			procData.Swap = menInfo.Swap
-		}
-		if ioStat, err := proc.IOCounters(); err == nil {
-			procData.DiskWrite = ioStat.WriteBytes
-			procData.DiskRead = ioStat.ReadBytes
-		}
-		procData.CmdLine, _ = proc.Cmdline()
-
-		return procData, true
-	}
-
 	var (
 		dataArr    = []model.PsProcessData{}
 		mu         sync.Mutex
@@ -100,7 +45,7 @@ func GetProcessData(data any) ([]model.PsProcessData, error) {
 			defer wg.Done()
 			localDataArr := make([]model.PsProcessData, 0, end-start) // 本地切片避免竞态
 			for j := start; j < end; j++ {
-				if data, ok := handleData(processes[j]); ok {
+				if data, ok := parseProcessData(processes[j], query); ok {
 					localDataArr = append(localDataArr, data)
 				}
 			}
@@ -117,4 +62,59 @@ func GetProcessData(data any) ([]model.PsProcessData, error) {
 	})
 
 	return dataArr, err
+}
+
+// parseProcessData 解析数据
+func parseProcessData(proc *process.Process, query model.PsProcessQuery) (model.PsProcessData, bool) {
+	procData := model.PsProcessData{
+		PID: proc.Pid,
+	}
+	if procName, err := proc.Name(); err == nil {
+		procData.Name = procName
+	}
+	if username, err := proc.Username(); err == nil {
+		procData.Username = username
+	}
+
+	// 查询过滤
+	if query.PID > 0 && procData.PID != query.PID {
+		return procData, false
+	}
+	if query.Name != "" && !strings.Contains(procData.Name, query.Name) {
+		return procData, false
+	}
+	if query.Username != "" && !strings.Contains(procData.Username, query.Username) {
+		return procData, false
+	}
+
+	procData.PPID, _ = proc.Ppid()
+	if statusArray, err := proc.Status(); err == nil && len(statusArray) > 0 {
+		procData.Status = strings.Join(statusArray, ",")
+	}
+	if createTime, err := proc.CreateTime(); err == nil {
+		procData.StartTime = createTime
+	}
+	procData.NumThreads, _ = proc.NumThreads()
+	if connections, err := proc.Connections(); err == nil {
+		procData.NumConnections = len(connections)
+	}
+	cpuPercent, _ := proc.CPUPercent()
+	procData.CpuPercent = fmt.Sprintf("%.2f", cpuPercent)
+	menInfo, procErr := proc.MemoryInfo()
+	if procErr == nil {
+		procData.Rss = menInfo.RSS
+		procData.Data = menInfo.Data
+		procData.VMS = menInfo.VMS
+		procData.HWM = menInfo.HWM
+		procData.Stack = menInfo.Stack
+		procData.Locked = menInfo.Locked
+		procData.Swap = menInfo.Swap
+	}
+	if ioStat, err := proc.IOCounters(); err == nil {
+		procData.DiskWrite = ioStat.WriteBytes
+		procData.DiskRead = ioStat.ReadBytes
+	}
+	procData.CmdLine, _ = proc.Cmdline()
+
+	return procData, true
 }

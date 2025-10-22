@@ -62,7 +62,8 @@ func (s IPerf) Run(conn *ws.ServerConn, msg []byte) {
 		return
 	case "iperf":
 		// SSH会话消息接收写入会话
-		if command, err := s.parseOptions(reqMsg.Data); command != "" && err == nil {
+		command, err := s.parseOptions(reqMsg.Data)
+		if command != "" && err == nil {
 			localClientSession := conn.GetAnyConn().(*cmd.LocalClientSession)
 			if _, err := localClientSession.Write(command); err != nil {
 				wsService.SendErr(conn, reqMsg.RequestID, err.Error())

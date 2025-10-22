@@ -55,7 +55,7 @@ func (s OMCController) LinkSet(c *gin.Context) {
 		c.JSON(422, resp.CodeMsg(resp.CODE_PARAM_PARSER, errMsgs))
 		return
 	}
-	if err := service.OMCInfoSet(body);err != nil {
+	if err := service.OMCInfoSet(body); err != nil {
 		c.JSON(200, resp.ErrMsg(err.Error()))
 		return
 	}
