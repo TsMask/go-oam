@@ -2,6 +2,7 @@ package route
 
 import (
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -46,7 +47,7 @@ func Run(router *gin.Engine) error {
 	for _, v := range routeArr {
 		item, ok := v.(map[string]any)
 		if !ok {
-			return fmt.Errorf("route config not found")
+			return fmt.Errorf("route config info error")
 		}
 		address := fmt.Sprint(item["addr"])
 		schema := fmt.Sprint(item["schema"])
@@ -59,9 +60,11 @@ func Run(router *gin.Engine) error {
 				defer wg.Done()
 				for i := range 10 {
 					if err := router.RunTLS(addr, certFile, keyFile); err != nil {
-						fmt.Printf("[OAM] route run tls error => %v\n", err)
-						time.Sleep(10 * time.Second) // 重试间隔时间
-						fmt.Printf("[OAM] trying to restart HTTPS server on %s (Attempt %d)\n", address, i)
+						log.Printf("[OAM] route run https error, %s\n", err.Error())
+						log.Printf("[OAM] trying to restart HTTPS server on %s (Attempt %d)\n", address, i)
+						// 等待指数退避的时间
+						backoffTime := time.Duration(1<<i) * time.Second // 2^i 秒
+						time.Sleep(backoffTime)
 					}
 				}
 			}(address, certFile, keyFile)
@@ -72,15 +75,16 @@ func Run(router *gin.Engine) error {
 				defer wg.Done()
 				for i := range 10 {
 					if err := router.Run(address); err != nil {
-						fmt.Printf("[OAM] route run error => %v\n", err)
-						time.Sleep(10 * time.Second) // 重试间隔时间
-						fmt.Printf("[OAM] trying to restart HTTP server on %s (Attempt %d)\n", address, i)
+						log.Printf("[OAM] route run http error, %s\n", err.Error())
+						log.Printf("[OAM] trying to restart HTTP server on %s (Attempt %d)\n", address, i)
+						// 等待指数退避的时间
+						backoffTime := time.Duration(1<<i) * time.Second // 2^i 秒
+						time.Sleep(backoffTime)
 					}
 				}
 			}(address)
 		}
 	}
 	wg.Wait()
-	fmt.Println("route server stop")
 	return nil
 }

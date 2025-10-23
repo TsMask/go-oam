@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"fmt"
+	"log"
 	"runtime"
 	"time"
 
@@ -9,7 +9,7 @@ import (
 )
 
 // Report 请求响应日志
-func Report() gin.HandlerFunc {
+func Report(tag string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
 
@@ -19,6 +19,6 @@ func Report() gin.HandlerFunc {
 		// 计算请求处理时间，并打印日志
 		duration := time.Since(start)
 		numGoroutines := runtime.NumGoroutine()
-		fmt.Printf("\n访问接口: %s %s\n总耗时: %v\n当前活跃的Goroutine数量: %d", c.Request.Method, c.Request.RequestURI, duration, numGoroutines)
+		log.Printf("[%s] Report\nAPI: %s %s\nTotal Duration: %v\nCurrently Active Goroutines: %d\n", tag, c.Request.Method, c.Request.RequestURI, duration, numGoroutines)
 	}
 }

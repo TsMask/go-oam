@@ -2,7 +2,6 @@ package ping
 
 import (
 	"encoding/json"
-	"fmt"
 	"runtime"
 	"time"
 
@@ -79,7 +78,6 @@ func (p *Ping) Statistics() (*probing.Statistics, error) {
 	}
 	err = pinger.Run()
 	if err != nil {
-		fmt.Println(err)
 		return nil, err
 	}
 

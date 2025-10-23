@@ -17,7 +17,6 @@ func GetNetConnections(data any) ([]model.NetConnectData, error) {
 	var query model.NetConnectQuery
 	if err := json.Unmarshal(msgByte, &query); err != nil {
 		return nil, fmt.Errorf("query data structure error, %s", err.Error())
-
 	}
 
 	dataArr := []model.NetConnectData{}

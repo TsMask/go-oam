@@ -80,5 +80,4 @@ func Config(action, paramName, loc string, paramValue any) error {
 		return invoke.Config(action, paramName, loc, paramValue)
 	}
 	return fmt.Errorf("config unrealized => %s > %s > %s > %v", action, paramName, loc, paramValue)
-
 }

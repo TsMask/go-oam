@@ -2,7 +2,7 @@ package service
 
 import (
 	"context"
-	"fmt"
+	"log"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -55,8 +55,10 @@ func (s *KPI) KPITimerStart(url string) {
 				// 安全地获取当前数据
 				dataMap := s.safeGetAllData()
 				if len(dataMap) != 0 {
-					if err := KPISend(url, s.NeUid, int64(s.Granularity.Seconds()), dataMap); err != nil {
-						fmt.Printf("KPI send failed, err: %v", err)
+					granularity := int64(s.Granularity.Seconds())
+					err := KPISend(url, s.NeUid, granularity, dataMap)
+					if err != nil {
+						log.Printf("[OAM] kpi timer send failed NeUid: %s, Granularity: %ds\n%s\n", s.NeUid, granularity, err.Error())
 					}
 				}
 
