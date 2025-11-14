@@ -1,13 +1,13 @@
 package file
 
 import (
-	"fmt"
-	"io"
-	"mime/multipart"
-	"os"
-	"path/filepath"
-	"sort"
-	"strconv"
+    "fmt"
+    "io"
+    "os"
+    "mime/multipart"
+    "path/filepath"
+    "sort"
+    "strconv"
 )
 
 // transferToNewFile 读取目标文件转移到新路径下
@@ -36,6 +36,19 @@ func transferToNewFile(file *multipart.FileHeader, dst string) error {
 
 	_, err = io.Copy(out, src)
 	return err
+}
+
+func writeBytesToFile(dst string, data []byte) error {
+    if err := os.MkdirAll(filepath.Dir(dst), 0775); err != nil {
+        return err
+    }
+    out, err := os.Create(dst)
+    if err != nil {
+        return err
+    }
+    defer out.Close()
+    _, err = out.Write(data)
+    return err
 }
 
 // mergeToNewFile 将多个文件合并成一个文件并删除合并前的切片目录文件

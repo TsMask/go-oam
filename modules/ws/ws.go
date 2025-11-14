@@ -10,9 +10,10 @@ import (
 func SetupRoute(router gin.IRouter) {
 	// WebSocket 协议
 	ws := controller.NewWSController
-	wsGroup := router.Group("/ws")
-	{
-		wsGroup.GET("", ws.WS) // ws
-		wsGroup.GET("/test", ws.Test)
-	}
+    wsGroup := router.Group("/ws")
+    {
+        wsGroup.GET("", ws.WS) // ws
+        wsGroup.GET("/test", ws.Test)
+        wsGroup.GET("/binary", ws.WSBinary)
+    }
 }

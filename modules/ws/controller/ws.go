@@ -67,6 +67,33 @@ func (s *WSController) WS(c *gin.Context) {
 	}
 }
 
+func (s *WSController) WSBinary(c *gin.Context) {
+	var query struct {
+		BindUID string `form:"bindUid"  binding:"required"`
+	}
+	if err := c.ShouldBindQuery(&query); err != nil {
+		errMsgs := fmt.Sprintf("bind err: %s", resp.FormatBindError(err))
+		c.JSON(422, resp.CodeMsg(resp.CODE_PARAM_PARSER, errMsgs))
+		return
+	}
+
+	wsConn := ws.ServerConn{BindUID: query.BindUID}
+	if err := wsConn.Upgrade(c.Writer, c.Request); err != nil {
+		c.JSON(422, resp.CodeMsg(resp.CODE_PARAM_CHEACK, err.Error()))
+		return
+	}
+	defer wsConn.Close()
+	go wsConn.WriteListen(2, nil)
+	go wsConn.ReadListen(2, nil, service.ReceiveBinary)
+	wsConn.SendJSON(resp.OkData(map[string]string{"clientId": wsConn.ClientId()}))
+	service.ClientAdd(&wsConn)
+	defer service.ClientRemove(&wsConn)
+	for range wsConn.StopChan {
+		wsConn.Close()
+		return
+	}
+}
+
 // Test 测试
 //
 // GET /test?clientId=xxx

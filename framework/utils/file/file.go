@@ -156,6 +156,21 @@ func TransferUploadFile(file *multipart.FileHeader, allowExts []string) (string,
 	return writePathFile, nil
 }
 
+func TransferUploadBytes(fileName string, data []byte, allowExts []string) (string, error) {
+    err := isAllowWrite(fileName, allowExts, int64(len(data)))
+    if err != nil {
+        return "", err
+    }
+    dir := uploadFileDir()
+    filePath := date.ParseDatePath(time.Now())
+    newName := generateFileName(fileName)
+    writePathFile := filepath.Join(dir, filePath, newName)
+    if err = writeBytesToFile(writePathFile, data); err != nil {
+        return "", err
+    }
+    return writePathFile, nil
+}
+
 // ReadUploadFileStream 上传资源文件读取
 //
 // filePath 文件存放资源路径，URL相对地址 如：/upload/common/2023/06/xxx.png
@@ -241,6 +256,20 @@ func TransferChunkUploadFile(file *multipart.FileHeader, index, identifier strin
 		return "", err
 	}
 	return filepath.ToSlash(writePathFile), nil
+}
+
+func TransferChunkUploadBytes(originalFileName, index, identifier string, data []byte) (string, error) {
+    err := isAllowWrite(originalFileName, []string{}, int64(len(data)))
+    if err != nil {
+        return "", err
+    }
+    dir := uploadFileDir()
+    filePath := date.ParseDatePath(time.Now())
+    writePathFile := path.Join(dir, filePath, "chunk", identifier, index)
+    if err = writeBytesToFile(writePathFile, data); err != nil {
+        return "", err
+    }
+    return filepath.ToSlash(writePathFile), nil
 }
 
 // 上传资源切片文件检查
