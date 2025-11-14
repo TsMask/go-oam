@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -29,7 +30,7 @@ func UENBHistoryList(n int) []model.UENB {
 	}
 
 	// 计算要返回的记录数量
-	historyLen := len(kpiHistorys)
+	historyLen := len(uenbHistorys)
 	startIndex := 0
 
 	// 仅当 n > 0 并且历史记录数大于 n 时才截取
@@ -95,9 +96,13 @@ func UENBPushURL(url string, uenb *model.UENB) error {
 	safeAppendUENBHistory(*uenb)
 
 	// 发送
-	_, err := fetch.PostJSON(url, uenb, nil)
-	if err != nil {
-		return err
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := fetch.EnqueuePush(url, uenb); err != nil {
+		_, err := fetch.PostJSON(ctx, url, uenb, nil)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }

@@ -2,6 +2,7 @@ package fetch
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,22 +14,32 @@ import (
 	"time"
 
 	"github.com/tsmask/go-oam/framework/config"
+	"github.com/tsmask/go-oam/framework/utils/parse"
 )
 
 // userAgent 自定义 User-Agent
 var userAgent = fmt.Sprintf("%s/%s", strings.ToLower(fmt.Sprint(config.Get("ne.type"))), config.Get("ne.version"))
 
-// Get 发送 GET 请求
-// timeout 超时时间（毫秒）
-func Get(url string, headers map[string]string, timeout int) ([]byte, error) {
-	if timeout < 100 || timeout > 180_000 {
-		timeout = 100
-	}
-	client := &http.Client{
-		Timeout: time.Duration(timeout) * time.Millisecond, // 超时时间
-	}
+var defaultTransport = &http.Transport{
+	MaxIdleConns:        100,
+	MaxIdleConnsPerHost: 100,
+	IdleConnTimeout:     90 * time.Second,
+	ForceAttemptHTTP2:   true, // 连接池与 HTTP/2
+}
 
-	req, err := http.NewRequest("GET", url, nil)
+var defaultClient = &http.Client{Transport: defaultTransport}
+
+func maxResponseBytes() int64 {
+	mb := parse.Number(config.Get("fetch.maxResponseMB"))
+	if mb <= 0 {
+		mb = 4
+	}
+	return int64(mb) * 1024 * 1024
+}
+
+// Get 发送 GET 请求
+func Get(ctx context.Context, url string, headers map[string]string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -39,7 +50,7 @@ func Get(url string, headers map[string]string, timeout int) ([]byte, error) {
 		req.Header.Set(key, value)
 	}
 
-	resp, err := client.Do(req)
+	resp, err := defaultClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +60,7 @@ func Get(url string, headers map[string]string, timeout int) ([]byte, error) {
 		return nil, fmt.Errorf("request returned status: %s", resp.Status)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes()))
 	if err != nil {
 		return nil, err
 	}
@@ -57,11 +68,9 @@ func Get(url string, headers map[string]string, timeout int) ([]byte, error) {
 	return body, nil
 }
 
-// Post 发送 POST 请求
-func Post(url string, data url.Values, headers map[string]string) ([]byte, error) {
-	client := &http.Client{}
-
-	req, err := http.NewRequest("POST", url, strings.NewReader(data.Encode()))
+// PostForm 发送 POST 请求, 并将请求体序列化为表单格式
+func PostForm(ctx context.Context, url string, data url.Values, headers map[string]string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, "POST", url, strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +81,7 @@ func Post(url string, data url.Values, headers map[string]string) ([]byte, error
 		req.Header.Set(key, value)
 	}
 
-	resp, err := client.Do(req)
+	resp, err := defaultClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +91,7 @@ func Post(url string, data url.Values, headers map[string]string) ([]byte, error
 		return nil, fmt.Errorf("request returned status: %s", resp.Status)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes()))
 	if err != nil {
 		return nil, err
 	}
@@ -91,43 +100,47 @@ func Post(url string, data url.Values, headers map[string]string) ([]byte, error
 }
 
 // PostJSON 发送 POST 请求，并将请求体序列化为 JSON 格式
-func PostJSON(url string, data any, headers map[string]string) ([]byte, error) {
-	client := &http.Client{
-		Timeout: 10 * time.Second, // 超时时间
-	}
-
+func PostJSON(ctx context.Context, url string, data any, headers map[string]string) ([]byte, error) {
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return nil, err
 	}
-
-	req, err := http.NewRequest("POST", url, bytes.NewReader(jsonData))
-	if err != nil {
-		return nil, err
+	var lastErr error
+	backoff := 200 * time.Millisecond
+	for attempt := 0; attempt < 3; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(jsonData))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("User-Agent", userAgent)
+		req.Header.Set("Content-Type", "application/json;charset=UTF-8")
+		for key, value := range headers {
+			req.Header.Set(key, value)
+		}
+		resp, err := defaultClient.Do(req)
+		if err != nil {
+			lastErr = err
+		} else {
+			defer resp.Body.Close()
+			if resp.StatusCode >= http.StatusInternalServerError {
+				lastErr = fmt.Errorf("request returned status: %s", resp.Status)
+			} else if resp.StatusCode >= http.StatusMultipleChoices {
+				return nil, fmt.Errorf("request returned status: %s", resp.Status)
+			} else {
+				body, err := io.ReadAll(resp.Body)
+				if err != nil {
+					lastErr = err
+				} else {
+					return body, nil
+				}
+			}
+		}
+		if attempt < 2 {
+			time.Sleep(backoff)
+			backoff *= 2
+		}
 	}
-
-	req.Header.Set("User-Agent", userAgent)
-	req.Header.Set("Content-Type", "application/json;charset=UTF-8")
-	for key, value := range headers {
-		req.Header.Set(key, value)
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= http.StatusMultipleChoices {
-		return nil, fmt.Errorf("request returned status: %s", resp.Status)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	return body, nil
+	return nil, lastErr
 }
 
 // UploadFile 上传文件函数，接收 URL 地址、表单参数和文件对象，返回响应内容或错误信息
@@ -157,7 +170,7 @@ func PostUploadFile(url string, params map[string]string, file *os.File) ([]byte
 		return nil, fmt.Errorf("failed to close writer: %v", err)
 	}
 
-	req, err := http.NewRequest("POST", url, body)
+	req, err := http.NewRequestWithContext(context.Background(), "POST", url, body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create HTTP request: %v", err)
 	}
@@ -165,8 +178,7 @@ func PostUploadFile(url string, params map[string]string, file *os.File) ([]byte
 	req.Header.Set("User-Agent", userAgent)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := defaultClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("HTTP request failed: %v", err)
 	}
@@ -176,7 +188,7 @@ func PostUploadFile(url string, params map[string]string, file *os.File) ([]byte
 		return nil, fmt.Errorf("request returned status: %s", resp.Status)
 	}
 
-	responseBody, err := io.ReadAll(resp.Body)
+	responseBody, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes()))
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response body: %v", err)
 	}
@@ -185,50 +197,38 @@ func PostUploadFile(url string, params map[string]string, file *os.File) ([]byte
 }
 
 // PutJSON 发送 PUT 请求，并将请求体序列化为 JSON 格式
-func PutJSON(url string, data any, headers map[string]string) ([]byte, error) {
-	client := &http.Client{
-		Timeout: 10 * time.Second, // 超时时间
-	}
-
+func PutJSON(ctx context.Context, url string, data any, headers map[string]string) ([]byte, error) {
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return nil, err
 	}
-
-	req, err := http.NewRequest("PUT", url, bytes.NewReader(jsonData))
+	req, err := http.NewRequestWithContext(ctx, "PUT", url, bytes.NewReader(jsonData))
 	if err != nil {
 		return nil, err
 	}
-
 	req.Header.Set("User-Agent", userAgent)
 	req.Header.Set("Content-Type", "application/json;charset=UTF-8")
 	for key, value := range headers {
 		req.Header.Set(key, value)
 	}
-
-	resp, err := client.Do(req)
+	resp, err := defaultClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
-
 	if resp.StatusCode >= http.StatusMultipleChoices {
 		return nil, fmt.Errorf("request returned status: %s", resp.Status)
 	}
-
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes()))
 	if err != nil {
 		return nil, err
 	}
-
 	return body, nil
 }
 
 // Delete 发送 DELETE 请求
-func Delete(url string, headers map[string]string) ([]byte, error) {
-	client := &http.Client{}
-
-	req, err := http.NewRequest("DELETE", url, nil)
+func Delete(ctx context.Context, url string, headers map[string]string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -239,7 +239,7 @@ func Delete(url string, headers map[string]string) ([]byte, error) {
 		req.Header.Set(key, value)
 	}
 
-	resp, err := client.Do(req)
+	resp, err := defaultClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -249,7 +249,7 @@ func Delete(url string, headers map[string]string) ([]byte, error) {
 		return nil, fmt.Errorf("request returned status: %s", resp.Status)
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes()))
 	if err != nil {
 		return nil, err
 	}

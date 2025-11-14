@@ -49,22 +49,29 @@ func (s *KPI) KPITimerStart(url string) {
 
 	go func() {
 		defer kpiTimer.Stop()
+		fail := 0
 		for {
 			select {
 			case <-kpiTimer.C:
-				// 安全地获取当前数据
 				dataMap := s.safeGetAllData()
 				if len(dataMap) != 0 {
 					granularity := int64(s.Granularity.Seconds())
 					err := KPISend(url, s.NeUid, granularity, dataMap)
 					if err != nil {
 						log.Printf("[OAM] kpi timer send failed NeUid: %s, Granularity: %ds\n%s\n", s.NeUid, granularity, err.Error())
+						fail++
+					} else {
+						fail = 0
+						s.safeClearData()
 					}
 				}
-
-				// 安全地清空数据
-				s.safeClearData()
-				kpiTimer.Reset(s.Granularity)
+				delay := s.Granularity
+				if fail == 1 {
+					delay = s.Granularity * 2
+				} else if fail >= 2 {
+					delay = s.Granularity * 4
+				}
+				kpiTimer.Reset(delay)
 			case <-ctx.Done():
 				return
 			}
@@ -269,9 +276,13 @@ func KPISend(url, neUid string, granularity int64, dataMap map[string]float64) e
 
 	safeAppendHistory(k)
 
-	_, err := fetch.PostJSON(url, k, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	_, err := fetch.PostJSON(ctx, kpiUrl(url), k, nil)
 	if err != nil {
 		return err
 	}
 	return nil
 }
+
+func kpiUrl(url string) string { return url }
