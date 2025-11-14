@@ -1,79 +1,157 @@
 package config
 
 import (
-	"bytes"
 	"embed"
+	"encoding/json"
+	"fmt"
 	"log"
 	"math"
+	"strings"
 	"time"
 
-	"github.com/spf13/viper"
+	"gopkg.in/yaml.v3"
 )
 
 //go:embed config.yaml
 var configFile embed.FS
 
-// 程序配置
-var conf *viper.Viper = viper.New()
+var conf map[string]any
+var runTime time.Time
 
 // 初始化程序配置
 func InitConfig() {
-	initViper()
-	// 记录程序开始运行的时间点
-	conf.Set("runTime", time.Now())
+	initConfigFromEmbed()
+	runTime = time.Now()
 }
 
 // RunTime 程序开始运行的时间
 func RunTime() time.Time {
-	return conf.GetTime("runTime")
+	return runTime
 }
 
 // LicenseDaysLeft 网元License剩余天数，小于0是过期
 func LicenseDaysLeft() int64 {
-	expire := conf.GetString("ne.expiryDate")
+	expire := strings.TrimSpace(fmtString(Get("ne.expiryDate")))
 	if expire == "" || expire == "<nil>" || expire == "2000-00-00" {
 		return -1
 	}
-	// 解析过期时间
 	expireTime, err := time.Parse("2006-01-02", expire)
 	if err != nil {
 		return -1
 	}
-	// 计算距离天数，到结束日期计算是0
 	daysLeft := time.Until(expireTime).Hours() / 24
 	return int64(math.Ceil(daysLeft))
 }
 
-// 配置文件读取
-func initViper() {
-	// 如果配置文件名中没有扩展名，则需要设置Type
-	conf.SetConfigType("yaml")
-	// 读取默认配置文件
-	configDefaultByte, err := configFile.ReadFile("config.yaml")
+func initConfigFromEmbed() {
+	data, err := configFile.ReadFile("config.yaml")
 	if err != nil {
 		log.Fatalf("config default file read error: %s", err)
 		return
 	}
-	if err = conf.ReadConfig(bytes.NewReader(configDefaultByte)); err != nil {
-		log.Fatalf("config default file read error: %s", err)
+	var raw map[string]any
+	if err = yaml.Unmarshal(data, &raw); err != nil {
+		log.Fatalf("config default file parse error: %s", err)
 		return
+	}
+	conf = normalizeKeys(raw)
+}
+
+func normalizeKeys(v any) map[string]any {
+	m, ok := v.(map[string]any)
+	if !ok {
+		return map[string]any{}
+	}
+	out := make(map[string]any, len(m))
+	for k, val := range m {
+		lk := strings.ToLower(k)
+		out[lk] = normalizeValue(val)
+	}
+	return out
+}
+
+func normalizeValue(v any) any {
+	switch t := v.(type) {
+	case map[string]any:
+		return normalizeKeys(t)
+	case []any:
+		arr := make([]any, len(t))
+		for i, e := range t {
+			arr[i] = normalizeValue(e)
+		}
+		return arr
+	default:
+		return v
 	}
 }
 
 // Get 获取配置信息
-//
 // Get("ne.version")
 func Get(key string) any {
-	v := conf.Get(key)
-	if v == nil {
+	if conf == nil {
 		return ""
 	}
-	return v
+	parts := strings.Split(key, ".")
+	cur := any(conf)
+	for _, p := range parts {
+		p = strings.ToLower(strings.TrimSpace(p))
+		m, ok := cur.(map[string]any)
+		if !ok {
+			return ""
+		}
+		val, exists := m[p]
+		if !exists {
+			// 尝试不区分大小写匹配
+			found := false
+			for mk, mv := range m {
+				if strings.EqualFold(mk, p) {
+					val = mv
+					found = true
+					break
+				}
+			}
+			if !found {
+				return ""
+			}
+		}
+		cur = val
+	}
+	if cur == nil {
+		return ""
+	}
+	return cur
 }
 
 // Set 修改配置信息
-//
 // Set("ne.version")
 func Set(key string, value any) {
-	conf.Set(key, value)
+	if conf == nil {
+		conf = map[string]any{}
+	}
+	parts := strings.Split(key, ".")
+	cur := conf
+	for i, p := range parts {
+		p = strings.ToLower(strings.TrimSpace(p))
+		if i == len(parts)-1 {
+			cur[p] = value
+			return
+		}
+		next, ok := cur[p].(map[string]any)
+		if !ok {
+			next = map[string]any{}
+			cur[p] = next
+		}
+		cur = next
+	}
+}
+
+func fmtString(v any) string {
+	switch t := v.(type) {
+	case string:
+		return t
+	case json.Number:
+		return t.String()
+	default:
+		return strings.TrimSpace(fmt.Sprint(v))
+	}
 }
