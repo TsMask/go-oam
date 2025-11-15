@@ -12,10 +12,9 @@ import (
 )
 
 // GetNetConnections 获取网络连接进程
-func GetNetConnections(data any) ([]model.NetConnectData, error) {
-	msgByte, _ := json.Marshal(data)
+func GetNetConnections(data []byte) ([]model.NetConnectData, error) {
 	var query model.NetConnectQuery
-	if err := json.Unmarshal(msgByte, &query); err != nil {
+	if err := json.Unmarshal(data, &query); err != nil {
 		return nil, fmt.Errorf("query data structure error, %s", err.Error())
 	}
 

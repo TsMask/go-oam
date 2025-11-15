@@ -2,7 +2,9 @@ package controller
 
 import (
 	"fmt"
+	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/tsmask/go-oam/framework/route/resp"
 	"github.com/tsmask/go-oam/framework/ws"
 	"github.com/tsmask/go-oam/modules/ws/service"
@@ -32,44 +34,8 @@ type WSController struct{}
 //	@Router			/ws [get]
 func (s *WSController) WS(c *gin.Context) {
 	var query struct {
-		BindUID string `form:"bindUid"  binding:"required"` // 绑定唯一标识
-	}
-	if err := c.ShouldBindQuery(&query); err != nil {
-		errMsgs := fmt.Sprintf("bind err: %s", resp.FormatBindError(err))
-		c.JSON(422, resp.CodeMsg(resp.CODE_PARAM_PARSER, errMsgs))
-		return
-	}
-
-	wsConn := ws.ServerConn{
-		BindUID: query.BindUID, // 绑定唯一标识ID
-	}
-	// 将 HTTP 连接升级为 WebSocket 连接
-	if err := wsConn.Upgrade(c.Writer, c.Request); err != nil {
-		c.JSON(422, resp.CodeMsg(resp.CODE_PARAM_CHEACK, err.Error()))
-		return
-	}
-	defer wsConn.Close()
-	go wsConn.WriteListen(1, nil)
-	go wsConn.ReadListen(1, nil, service.ReceiveCommont)
-	// 发客户端id确认是否连接
-	wsConn.SendJSON(resp.OkData(map[string]string{
-		"clientId": wsConn.ClientId(),
-	}))
-
-	// 记录客户端
-	service.ClientAdd(&wsConn)
-	defer service.ClientRemove(&wsConn)
-
-	// 等待停止信号
-	for range wsConn.StopChan {
-		wsConn.Close()
-		return
-	}
-}
-
-func (s *WSController) WSBinary(c *gin.Context) {
-	var query struct {
-		BindUID string `form:"bindUid"  binding:"required"`
+		BindUID string `form:"bindUid"  binding:"required"`                   // 绑定唯一标识
+		MsgType string `form:"msgType"  binding:"required,oneof=text binary"` // 消息类型
 	}
 	if err := c.ShouldBindQuery(&query); err != nil {
 		errMsgs := fmt.Sprintf("bind err: %s", resp.FormatBindError(err))
@@ -78,16 +44,24 @@ func (s *WSController) WSBinary(c *gin.Context) {
 	}
 
 	wsConn := ws.ServerConn{BindUID: query.BindUID}
+	// 将 HTTP 连接升级为 WebSocket 连接
 	if err := wsConn.Upgrade(c.Writer, c.Request); err != nil {
 		c.JSON(422, resp.CodeMsg(resp.CODE_PARAM_CHEACK, err.Error()))
 		return
 	}
 	defer wsConn.Close()
-	go wsConn.WriteListen(2, nil)
-	go wsConn.ReadListen(2, nil, service.ReceiveBinary)
-	wsConn.SendJSON(resp.OkData(map[string]string{"clientId": wsConn.ClientId()}))
+	go wsConn.WriteListen(nil)
+	go wsConn.ReadListen(nil, service.ReceiveCommon)
+	// 发客户端id确认是否连接
+	wsConn.SendTextJSON("", resp.CODE_SUCCESS, resp.MSG_SUCCCESS, map[string]string{
+		"clientId": wsConn.ClientId(),
+	})
+
+	// 记录客户端
 	service.ClientAdd(&wsConn)
 	defer service.ClientRemove(&wsConn)
+
+	// 等待停止信号
 	for range wsConn.StopChan {
 		wsConn.Close()
 		return
@@ -101,8 +75,16 @@ func (s *WSController) Test(c *gin.Context) {
 	errMsgArr := []string{}
 
 	clientId := c.Query("clientId")
+	msgType := c.DefaultQuery("msgType", "text")
+	messageType := websocket.TextMessage
+	if msgType == "binary" {
+		messageType = websocket.BinaryMessage
+	}
 	if clientId != "" {
-		err := service.ClientSend(c.Query("clientId"), "test message")
+		err := service.ClientSend(clientId, messageType, map[string]string{
+			"msgType": msgType,
+			"time":    time.Now().Format(time.RFC3339),
+		})
 		if err != nil {
 			errMsgArr = append(errMsgArr, "clientId: "+err.Error())
 		}

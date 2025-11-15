@@ -6,9 +6,9 @@ import (
 	"strings"
 
 	"github.com/tsmask/go-oam/framework/cmd"
+	"github.com/tsmask/go-oam/framework/route/resp"
 	"github.com/tsmask/go-oam/framework/ws"
-	wsModel "github.com/tsmask/go-oam/modules/ws/model"
-	wsService "github.com/tsmask/go-oam/modules/ws/service"
+	"github.com/tsmask/go-oam/framework/ws/protocol"
 )
 
 // 实例化服务层 IPerf 结构体
@@ -38,42 +38,25 @@ func (s IPerf) Version(version string) (string, error) {
 	return strings.TrimSpace(output), err
 }
 
-// Run 接收IPerf3终端交互业务处理
-func (s IPerf) Run(conn *ws.ServerConn, msg []byte) {
-	var reqMsg wsModel.WSRequest
-	if err := json.Unmarshal(msg, &reqMsg); err != nil {
-		wsService.SendErr(conn, "", "message format json error")
-		return
-	}
-
-	// 必传requestId确认消息
-	if reqMsg.RequestID == "" {
-		wsService.SendErr(conn, "", "message requestId is required")
-		return
-	}
-
-	switch reqMsg.Type {
-	case "close":
-		conn.Close()
-		return
-	case "ping", "PING":
-		conn.Pong()
-		wsService.SendOK(conn, reqMsg.RequestID, "PONG")
-		return
+// Session 接收IPerf终端交互业务处理
+//
+// messageType 消息类型 websocket.TextMessage=1 websocket.BinaryMessage=2
+func (s IPerf) Session(conn *ws.ServerConn, messageType int, req *protocol.Request) {
+	switch req.Type {
 	case "iperf":
 		// SSH会话消息接收写入会话
-		command, err := s.parseOptions(reqMsg.Data)
+		command, err := s.parseOptions(req.Data)
 		if command != "" && err == nil {
 			localClientSession := conn.GetAnyConn().(*cmd.LocalClientSession)
 			if _, err := localClientSession.Write(command); err != nil {
-				wsService.SendErr(conn, reqMsg.RequestID, err.Error())
+				conn.SendRespJSON(messageType, req.Uuid, resp.CODE_ERROR, err.Error(), nil)
 			}
 		}
 	case "ctrl-c":
 		// 模拟按下 Ctrl+C
 		localClientSession := conn.GetAnyConn().(*cmd.LocalClientSession)
 		if _, err := localClientSession.Write("\u0003\n"); err != nil {
-			wsService.SendErr(conn, reqMsg.RequestID, err.Error())
+			conn.SendRespJSON(messageType, req.Uuid, resp.CODE_ERROR, err.Error(), nil)
 		}
 	case "resize":
 		// 会话窗口重置
@@ -81,13 +64,13 @@ func (s IPerf) Run(conn *ws.ServerConn, msg []byte) {
 			Cols int `json:"cols"`
 			Rows int `json:"rows"`
 		}
-		msgByte, _ := json.Marshal(reqMsg.Data)
+		msgByte, _ := json.Marshal(req.Data)
 		if err := json.Unmarshal(msgByte, &data); err == nil {
 			localClientSession := conn.GetAnyConn().(*cmd.LocalClientSession)
 			localClientSession.WindowChange(data.Cols, data.Rows)
 		}
 	default:
-		wsService.SendErr(conn, reqMsg.RequestID, fmt.Sprintf("message type %s not supported", reqMsg.Type))
+		conn.SendRespJSON(messageType, req.Uuid, resp.CODE_ERROR, fmt.Sprintf("message type %s not supported", req.Type), nil)
 		return
 	}
 }

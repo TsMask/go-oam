@@ -159,3 +159,13 @@ go-oam
 ├── LICENSE                               文件-许可证
 └──  README.md                            文件-项目说明
 ```
+
+## 开发
+
+```bash
+protoc --go_out=. --go-grpc_out=. framework/ws/protocol/ws.proto
+
+# go get google.golang.org/protobuf@v1.36.9
+# go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.10
+
+```

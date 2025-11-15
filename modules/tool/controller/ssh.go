@@ -11,7 +11,6 @@ import (
 	"github.com/tsmask/go-oam/framework/route/resp"
 	"github.com/tsmask/go-oam/framework/ws"
 	"github.com/tsmask/go-oam/modules/tool/service"
-	wsService "github.com/tsmask/go-oam/modules/ws/service"
 )
 
 // 实例化控制层 SSHController 结构体
@@ -110,10 +109,10 @@ func (s SSHController) Session(c *gin.Context) {
 	}
 	defer wsConn.Close()
 	wsConn.SetAnyConn(clientSession)
-	go wsConn.WriteListen(1, nil)
-	go wsConn.ReadListen(1, nil, s.sshService.Session)
+	go wsConn.WriteListen(nil)
+	go wsConn.ReadListen(nil, s.sshService.Session)
 	// 发客户端id确认是否连接
-	wsService.SendOK(&wsConn, "", map[string]string{
+	wsConn.SendTextJSON("", resp.CODE_SUCCESS, resp.MSG_SUCCCESS, map[string]string{
 		"clientId": wsConn.ClientId(),
 	})
 
@@ -129,7 +128,7 @@ func (s SSHController) Session(c *gin.Context) {
 		case ms := <-msTicker.C:
 			outputByte := clientSession.Read()
 			if len(outputByte) > 0 {
-				wsService.SendOK(&wsConn, fmt.Sprintf("ssh_%d", ms.UnixMilli()), string(outputByte))
+				wsConn.SendTextJSON(fmt.Sprintf("ssh_%d", ms.UnixMilli()), resp.CODE_SUCCESS, string(outputByte), nil)
 			}
 		case <-wsConn.StopChan: // 等待停止信号
 			wsConn.Close()

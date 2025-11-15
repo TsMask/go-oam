@@ -8,7 +8,6 @@ import (
 	"github.com/tsmask/go-oam/framework/route/resp"
 	"github.com/tsmask/go-oam/framework/ws"
 	"github.com/tsmask/go-oam/modules/tool/service"
-	wsService "github.com/tsmask/go-oam/modules/ws/service"
 )
 
 // 实例化控制层 RedisController 结构体
@@ -86,10 +85,10 @@ func (s RedisController) Session(c *gin.Context) {
 		return
 	}
 	defer wsConn.Close()
-	go wsConn.WriteListen(1, nil)
-	go wsConn.ReadListen(1, nil, s.redisService.Session)
+	go wsConn.WriteListen(nil)
+	go wsConn.ReadListen(nil, s.redisService.Session)
 	// 发客户端id确认是否连接
-	wsService.SendOK(&wsConn, "", map[string]string{
+	wsConn.SendTextJSON("", resp.CODE_SUCCESS, resp.MSG_SUCCCESS, map[string]string{
 		"clientId": wsConn.ClientId(),
 	})
 

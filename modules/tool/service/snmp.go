@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/tsmask/go-oam/framework/route/resp"
 	"github.com/tsmask/go-oam/framework/ws"
+	"github.com/tsmask/go-oam/framework/ws/protocol"
 	"github.com/tsmask/go-oam/modules/callback"
-	wsModel "github.com/tsmask/go-oam/modules/ws/model"
-	wsService "github.com/tsmask/go-oam/modules/ws/service"
 )
 
 // 实例化服务层 SNMP 结构体
@@ -23,27 +23,8 @@ func (s SNMP) Command(oid, operType string, value any) any {
 }
 
 // SNMP 接收终端交互业务处理
-func (s SNMP) Session(conn *ws.ServerConn, msg []byte) {
-	var reqMsg wsModel.WSRequest
-	if err := json.Unmarshal(msg, &reqMsg); err != nil {
-		wsService.SendErr(conn, "", "message format json error")
-		return
-	}
-
-	// 必传requestId确认消息
-	if reqMsg.RequestID == "" {
-		wsService.SendErr(conn, "", "message requestId is required")
-		return
-	}
-
-	switch reqMsg.Type {
-	case "close":
-		conn.Close()
-		return
-	case "ping", "PING":
-		conn.Pong()
-		wsService.SendOK(conn, reqMsg.RequestID, "PONG")
-		return
+func (s SNMP) Session(conn *ws.ServerConn, messageType int, req *protocol.Request) {
+	switch req.Type {
 	case "snmp":
 		// SNMP会话消息接收写入会话
 		var data struct {
@@ -51,13 +32,13 @@ func (s SNMP) Session(conn *ws.ServerConn, msg []byte) {
 			OperType string `json:"operType" binding:"required,oneof=GET GETNEXT SET"`
 			Value    any    `json:"value"`
 		}
-		msgByte, _ := json.Marshal(reqMsg.Data)
+		msgByte, _ := json.Marshal(req.Data)
 		if err := json.Unmarshal(msgByte, &data); err == nil {
 			output := callback.SNMP(data.Oid, data.OperType, data.Value)
-			wsService.SendOK(conn, reqMsg.RequestID, output)
+			conn.SendRespJSON(messageType, req.Uuid, resp.CODE_SUCCESS, resp.MSG_SUCCCESS, output)
 		}
 	default:
-		wsService.SendErr(conn, reqMsg.RequestID, fmt.Sprintf("message type %s not supported", reqMsg.Type))
+		conn.SendRespJSON(messageType, req.Uuid, resp.CODE_ERROR, fmt.Sprintf("message type %s not supported", req.Type), nil)
 		return
 	}
 }

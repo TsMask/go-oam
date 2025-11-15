@@ -13,10 +13,9 @@ import (
 )
 
 // GetProcessData 获取进程数据
-func GetProcessData(data any) ([]model.PsProcessData, error) {
-	msgByte, _ := json.Marshal(data)
+func GetProcessData(data []byte) ([]model.PsProcessData, error) {
 	var query model.PsProcessQuery
-	if err := json.Unmarshal(msgByte, &query); err != nil {
+	if err := json.Unmarshal(data, &query); err != nil {
 		return nil, fmt.Errorf("query data structure error, %s", err.Error())
 	}
 
@@ -33,13 +32,10 @@ func GetProcessData(data any) ([]model.PsProcessData, error) {
 	)
 
 	chunkSize := (len(processes) + numWorkers - 1) / numWorkers
-	for i := 0; i < numWorkers; i++ {
+	for i := range numWorkers {
 		wg.Add(1)
 		start := i * chunkSize
-		end := (i + 1) * chunkSize
-		if end > len(processes) {
-			end = len(processes)
-		}
+		end := min((i+1)*chunkSize, len(processes))
 
 		go func(start, end int) {
 			defer wg.Done()

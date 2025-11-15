@@ -1,0 +1,17 @@
+syntax = "proto3";
+package protocol;
+option go_package = "framework/ws/protocol"; // 指定go的包名
+
+message Request {
+  string uuid = 1; // 请求唯一标识
+  string type = 2; // 业务类型
+  bytes  data = 3; // 业务请求参数
+}
+
+message Response {
+  string uuid = 1; // 请求唯一标识
+  int64  timestamp = 2; // 响应时间
+  int32  code = 3; // 响应码
+  string msg  = 4; // 响应消息
+  bytes  data = 5; // 响应数据
+}
