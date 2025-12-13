@@ -95,13 +95,7 @@ func AlarmPushURL(url string, alarm *model.Alarm) error {
 	safeAppendAlarmHistory(*alarm)
 
 	// 发送
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := fetch.EnqueuePush(url, alarm); err != nil {
-		_, err := fetch.PostJSON(ctx, url, alarm, nil)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	return fetch.Push(ctx, url, alarm)
 }

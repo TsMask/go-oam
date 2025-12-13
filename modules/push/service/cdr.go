@@ -95,13 +95,7 @@ func CDRPushURL(url string, cdr *model.CDR) error {
 	safeAppendCDRHistory(*cdr)
 
 	// 发送
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := fetch.EnqueuePush(url, cdr); err != nil {
-		_, err := fetch.PostJSON(ctx, url, cdr, nil)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	return fetch.Push(ctx, url, cdr)
 }

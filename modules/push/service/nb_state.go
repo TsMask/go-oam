@@ -96,13 +96,7 @@ func NBStatePushURL(url string, nbState *model.NBState) error {
 	safeAppendNBStateHistory(*nbState)
 
 	// 发送
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := fetch.EnqueuePush(url, nbState); err != nil {
-		_, err := fetch.PostJSON(ctx, url, nbState, nil)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	return fetch.Push(ctx, url, nbState)
 }

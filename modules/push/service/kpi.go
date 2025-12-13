@@ -276,13 +276,8 @@ func KPISend(url, neUid string, granularity int64, dataMap map[string]float64) e
 
 	safeAppendHistory(k)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	// 发送推送请求
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	_, err := fetch.PostJSON(ctx, kpiUrl(url), k, nil)
-	if err != nil {
-		return err
-	}
-	return nil
+	return fetch.Push(ctx, url, k)
 }
-
-func kpiUrl(url string) string { return url }

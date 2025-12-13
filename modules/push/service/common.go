@@ -107,13 +107,7 @@ func CommonPushURL(url string, common *model.Common) error {
 	safeAppendCommonHistory(common.Type, common)
 
 	// 发送推送请求
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := fetch.EnqueuePush(url, common); err != nil {
-		_, err := fetch.PostJSON(ctx, url, common, nil)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	return fetch.Push(ctx, url, common)
 }

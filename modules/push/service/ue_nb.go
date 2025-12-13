@@ -96,13 +96,7 @@ func UENBPushURL(url string, uenb *model.UENB) error {
 	safeAppendUENBHistory(*uenb)
 
 	// 发送
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := fetch.EnqueuePush(url, uenb); err != nil {
-		_, err := fetch.PostJSON(ctx, url, uenb, nil)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	return fetch.Push(ctx, url, uenb)
 }

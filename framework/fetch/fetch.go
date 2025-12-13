@@ -1,258 +1,134 @@
 package fetch
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"mime/multipart"
-	"net/http"
-	"net/url"
-	"os"
-	"strings"
 	"time"
 
-	"github.com/tsmask/go-oam/framework/config"
-	"github.com/tsmask/go-oam/framework/utils/parse"
+	"github.com/go-resty/resty/v2"
 )
 
-// userAgent 自定义 User-Agent
-var userAgent = fmt.Sprintf("%s/%s", strings.ToLower(fmt.Sprint(config.Get("ne.type"))), config.Get("ne.version"))
-
-var defaultTransport = &http.Transport{
-	MaxIdleConns:        100,
-	MaxIdleConnsPerHost: 100,
-	IdleConnTimeout:     90 * time.Second,
-	ForceAttemptHTTP2:   true, // 连接池与 HTTP/2
+// Options 请求选项
+type Options struct {
+	Ctx     context.Context   // 上下文，用于取消请求
+	Timeout int               // 单请求超时 (ms)
+	Headers map[string]string // 自定义请求头
+	Query   map[string]string // 查询参数
+	Form    map[string]string // 表单
+	Files   []FileUpload      // 文件上传
+	JSON    any               // JSON Body
+	Debug   bool              // 是否打印 Debug Log
 }
 
-var defaultClient = &http.Client{Transport: defaultTransport}
-
-func maxResponseBytes() int64 {
-	mb := parse.Number(config.Get("fetch.maxResponseMB"))
-	if mb <= 0 {
-		mb = 4
-	}
-	return int64(mb) * 1024 * 1024
+// FileUpload 文件上传
+type FileUpload struct {
+	Field string // 表单字段名
+	Path  string // 文件绝对路径
 }
 
-// Get 发送 GET 请求
-func Get(ctx context.Context, url string, headers map[string]string) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		return nil, err
+// ---------------------
+// 全局复用 Client
+// ---------------------
+var baseClient = resty.New().
+	SetRetryCount(2).
+	SetRetryWaitTime(300 * time.Millisecond).
+	SetRetryMaxWaitTime(2 * time.Second).
+	SetTimeout(1 * time.Minute)
+
+// -------------------------
+// 构建 Request
+// -------------------------
+func build(opts Options) (*resty.Client, *resty.Request) {
+	client := baseClient
+
+	// 单次请求 Timeout —— 使用 Clone
+	if opts.Timeout > 0 {
+		client = baseClient.Clone()
+		client.SetTimeout(time.Duration(opts.Timeout) * time.Millisecond)
 	}
 
-	req.Header.Set("User-Agent", userAgent)
-	req.Header.Set("Content-Type", "application/json;charset=UTF-8")
-	for key, value := range headers {
-		req.Header.Set(key, value)
+	req := client.R()
+	req.SetDebug(opts.Debug)
+
+	if opts.Ctx != nil {
+		req.SetContext(opts.Ctx)
 	}
 
-	resp, err := defaultClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= http.StatusMultipleChoices {
-		return nil, fmt.Errorf("request returned status: %s", resp.Status)
+	if opts.Headers != nil {
+		req.SetHeaders(opts.Headers)
 	}
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes()))
-	if err != nil {
-		return nil, err
+	if opts.Query != nil {
+		req.SetQueryParams(opts.Query)
 	}
 
-	return body, nil
+	if opts.JSON != nil {
+		req.SetHeader("Content-Type", "application/json")
+		req.SetBody(opts.JSON)
+	}
+
+	if opts.Form != nil {
+		req.SetFormData(opts.Form)
+	}
+
+	for _, f := range opts.Files {
+		req.SetFile(f.Field, f.Path)
+	}
+
+	return client, req
 }
 
-// PostForm 发送 POST 请求, 并将请求体序列化为表单格式
-func PostForm(ctx context.Context, url string, data url.Values, headers map[string]string) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, "POST", url, strings.NewReader(data.Encode()))
+// ----------------------
+// 统一执行 + 错误处理
+// ----------------------
+func do(req *resty.Request, method, url string) ([]byte, error) {
+	var (
+		resp *resty.Response
+		err  error
+	)
+
+	switch method {
+	case resty.MethodGet:
+		resp, err = req.Get(url)
+	case resty.MethodPost:
+		resp, err = req.Post(url)
+	case resty.MethodPut:
+		resp, err = req.Put(url)
+	case resty.MethodDelete:
+		resp, err = req.Delete(url)
+	}
+
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("network error: %w", err)
 	}
 
-	req.Header.Set("User-Agent", userAgent)
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	for key, value := range headers {
-		req.Header.Set(key, value)
+	if resp.IsError() {
+		return resp.Body(), fmt.Errorf("http error: %s", resp.Status())
 	}
 
-	resp, err := defaultClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= http.StatusMultipleChoices {
-		return nil, fmt.Errorf("request returned status: %s", resp.Status)
-	}
-
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes()))
-	if err != nil {
-		return nil, err
-	}
-
-	return body, nil
+	return resp.Body(), nil
 }
 
-// PostJSON 发送 POST 请求，并将请求体序列化为 JSON 格式
-func PostJSON(ctx context.Context, url string, data any, headers map[string]string) ([]byte, error) {
-	jsonData, err := json.Marshal(data)
-	if err != nil {
-		return nil, err
-	}
-	var lastErr error
-	backoff := 200 * time.Millisecond
-	for attempt := 0; attempt < 3; attempt++ {
-		req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(jsonData))
-		if err != nil {
-			return nil, err
-		}
-		req.Header.Set("User-Agent", userAgent)
-		req.Header.Set("Content-Type", "application/json;charset=UTF-8")
-		for key, value := range headers {
-			req.Header.Set(key, value)
-		}
-		resp, err := defaultClient.Do(req)
-		if err != nil {
-			lastErr = err
-		} else {
-			defer resp.Body.Close()
-			if resp.StatusCode >= http.StatusInternalServerError {
-				lastErr = fmt.Errorf("request returned status: %s", resp.Status)
-			} else if resp.StatusCode >= http.StatusMultipleChoices {
-				return nil, fmt.Errorf("request returned status: %s", resp.Status)
-			} else {
-				body, err := io.ReadAll(resp.Body)
-				if err != nil {
-					lastErr = err
-				} else {
-					return body, nil
-				}
-			}
-		}
-		if attempt < 2 {
-			time.Sleep(backoff)
-			backoff *= 2
-		}
-	}
-	return nil, lastErr
+// ----------------------
+// REST 方法封装
+// ----------------------
+
+func Get(url string, opts Options) ([]byte, error) {
+	_, req := build(opts)
+	return do(req, resty.MethodGet, url)
 }
 
-// UploadFile 上传文件函数，接收 URL 地址、表单参数和文件对象，返回响应内容或错误信息
-func PostUploadFile(url string, params map[string]string, file *os.File) ([]byte, error) {
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-
-	part, err := writer.CreateFormFile("file", file.Name())
-	if err != nil {
-		return nil, fmt.Errorf("failed to create form file: %v", err)
-	}
-
-	_, err = io.Copy(part, file)
-	if err != nil {
-		return nil, fmt.Errorf("failed to copy file content: %v", err)
-	}
-
-	for key, value := range params {
-		err = writer.WriteField(key, value)
-		if err != nil {
-			return nil, fmt.Errorf("failed to write form field: %v", err)
-		}
-	}
-
-	err = writer.Close()
-	if err != nil {
-		return nil, fmt.Errorf("failed to close writer: %v", err)
-	}
-
-	req, err := http.NewRequestWithContext(context.Background(), "POST", url, body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create HTTP request: %v", err)
-	}
-
-	req.Header.Set("User-Agent", userAgent)
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-
-	resp, err := defaultClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("HTTP request failed: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= http.StatusMultipleChoices {
-		return nil, fmt.Errorf("request returned status: %s", resp.Status)
-	}
-
-	responseBody, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes()))
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %v", err)
-	}
-
-	return responseBody, nil
+func Post(url string, opts Options) ([]byte, error) {
+	_, req := build(opts)
+	return do(req, resty.MethodPost, url)
 }
 
-// PutJSON 发送 PUT 请求，并将请求体序列化为 JSON 格式
-func PutJSON(ctx context.Context, url string, data any, headers map[string]string) ([]byte, error) {
-	jsonData, err := json.Marshal(data)
-	if err != nil {
-		return nil, err
-	}
-	req, err := http.NewRequestWithContext(ctx, "PUT", url, bytes.NewReader(jsonData))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("User-Agent", userAgent)
-	req.Header.Set("Content-Type", "application/json;charset=UTF-8")
-	for key, value := range headers {
-		req.Header.Set(key, value)
-	}
-	resp, err := defaultClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= http.StatusMultipleChoices {
-		return nil, fmt.Errorf("request returned status: %s", resp.Status)
-	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes()))
-	if err != nil {
-		return nil, err
-	}
-	return body, nil
+func Put(url string, opts Options) ([]byte, error) {
+	_, req := build(opts)
+	return do(req, resty.MethodPut, url)
 }
 
-// Delete 发送 DELETE 请求
-func Delete(ctx context.Context, url string, headers map[string]string) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Set("User-Agent", userAgent)
-	req.Header.Set("Content-Type", "application/json;charset=UTF-8")
-	for key, value := range headers {
-		req.Header.Set(key, value)
-	}
-
-	resp, err := defaultClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= http.StatusMultipleChoices {
-		return nil, fmt.Errorf("request returned status: %s", resp.Status)
-	}
-
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes()))
-	if err != nil {
-		return nil, err
-	}
-
-	return body, nil
+func Delete(url string, opts Options) ([]byte, error) {
+	_, req := build(opts)
+	return do(req, resty.MethodDelete, url)
 }
