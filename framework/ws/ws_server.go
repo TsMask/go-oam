@@ -6,24 +6,23 @@ import (
 	"fmt"
 	"net/http"
 	"time"
-	"unicode/utf8"
 
 	"github.com/gorilla/websocket"
 	"github.com/tsmask/go-oam/framework/route/resp"
 	"github.com/tsmask/go-oam/framework/utils/generate"
+	"github.com/tsmask/go-oam/framework/utils/parse"
 	"github.com/tsmask/go-oam/framework/ws/protocol"
 	"google.golang.org/protobuf/proto"
 )
 
 // ServerConn 服务端连接
 type ServerConn struct {
-	BindUID       string          // 绑定唯一标识ID
-	LastHeartbeat int64           // 最近一次心跳消息（毫秒）
-	SendChan      chan []byte     // 消息通道
-	StopChan      chan struct{}   // 停止信号-退出协程
-	wsConn        *websocket.Conn // 连接实例
 	id            string          // 客户端连接ID-随机字符串16位
+	lastHeartbeat int64           // 最近一次心跳消息（毫秒）
+	wsConn        *websocket.Conn // 连接实例
 	anyConn       any             // 子连接实例-携带某种连接会话
+	closeChan     chan struct{}   // 关闭信号-退出协程
+	SendChan      chan []byte     // 消息通道 容量默认100
 }
 
 // Upgrade http升级ws请求
@@ -49,15 +48,18 @@ func (c *ServerConn) Upgrade(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	c.wsConn = wsConn
-	c.LastHeartbeat = time.Now().UnixMilli()
-	c.id = generate.Code(16) // 保证在所有服务端中都能保证唯一即可
+	c.lastHeartbeat = time.Now().UnixMilli()
+	c.id = fmt.Sprintf("%s_%d", generate.Code(5), time.Now().Unix())
+	c.closeChan = make(chan struct{}, 1)
 	if c.SendChan == nil {
 		c.SendChan = make(chan []byte, 100)
 	}
-	if c.StopChan == nil {
-		c.StopChan = make(chan struct{}, 1)
-	}
 	return nil
+}
+
+// CloseSignal 服务端关闭信号
+func (c *ServerConn) CloseSignal() <-chan struct{} {
+	return c.closeChan
 }
 
 // Close 服务端关闭
@@ -66,13 +68,18 @@ func (c *ServerConn) Close() error {
 		return fmt.Errorf("plase upgrade conn to websocket conn")
 	}
 	c.SendChan <- []byte("ws:close")
-	c.StopChan <- struct{}{}
+	c.closeChan <- struct{}{}
 	return c.wsConn.Close()
 }
 
 // ClientId 客户端连接ID
 func (c *ServerConn) ClientId() string {
 	return c.id
+}
+
+// LastHeartbeat 最近一次心跳消息（毫秒）
+func (c *ServerConn) LastHeartbeat() int64 {
+	return c.lastHeartbeat
 }
 
 // Pong 客户端心跳非消息由客户端协商
@@ -94,7 +101,7 @@ func (c *ServerConn) SendText(res *protocol.Response) {
 func (c *ServerConn) SendTextJSON(uuid string, code int32, msg string, data any) {
 	var dataByte []byte
 	if data != nil {
-		if v, err := json.Marshal(data); err != nil {
+		if v, err := json.Marshal(data); err == nil {
 			dataByte = v
 		}
 	}
@@ -120,7 +127,7 @@ func (c *ServerConn) SendBinary(res *protocol.Response) {
 func (c *ServerConn) SendBinaryJSON(uuid string, code int32, msg string, data any) {
 	var dataByte []byte
 	if data != nil {
-		if v, err := json.Marshal(data); err != nil {
+		if v, err := json.Marshal(data); err == nil {
 			dataByte = v
 		}
 	}
@@ -153,18 +160,20 @@ func (c *ServerConn) GetAnyConn() any {
 	return c.anyConn
 }
 
-// ReadListen 客户端读取消息监听
+// ReadListen 服务端读取消息监听
 //
 // errorFn 接收错误回调函数
 // receiveFn 接收消息回调函数
 func (c *ServerConn) ReadListen(errorFn func(error), receiveFn func(*ServerConn, int, *protocol.Request)) {
 	defer func() {
+		c.Close()
 		if err := recover(); err != nil {
 			if errorFn != nil {
-				errorFn(fmt.Errorf("ws ReadMessage UID %s Panic Error: %v", c.BindUID, err))
+				errorFn(fmt.Errorf("ws ReadMessage ID %s Panic Error: %v", c.id, err))
 			}
 		}
 	}()
+
 	for {
 		if receiveFn == nil {
 			return
@@ -173,26 +182,24 @@ func (c *ServerConn) ReadListen(errorFn func(error), receiveFn func(*ServerConn,
 		messageType, msg, err := c.wsConn.ReadMessage()
 		if err != nil {
 			if errorFn != nil {
-				errorFn(fmt.Errorf("ws ReadMessage UID %s err: %s", c.BindUID, err.Error()))
+				errorFn(fmt.Errorf("ws ReadMessage ID %s Error: %v", c.id, err))
 			}
 			c.Close()
 			return
 		}
 		// fmt.Println(messageType, string(msg))
 
-		// 解析请求
+		// 解析消息
 		req := &protocol.Request{}
 		switch messageType {
 		case websocket.TextMessage:
-			err = json.Unmarshal(msg, req)
-			if err != nil {
-				c.SendTextJSON("", resp.CODE_ERROR, "message data format error", nil)
+			if err = json.Unmarshal(msg, req); err != nil {
+				c.SendRespJSON(messageType, "", resp.CODE_ERROR, err.Error(), nil)
 				continue
 			}
 		case websocket.BinaryMessage:
-			err = proto.Unmarshal(msg, req)
-			if err != nil {
-				c.SendBinaryJSON("", resp.CODE_ERROR, "message data format error", nil)
+			if err = proto.Unmarshal(msg, req); err != nil {
+				c.SendRespJSON(messageType, "", resp.CODE_ERROR, err.Error(), nil)
 				continue
 			}
 		default:
@@ -202,11 +209,7 @@ func (c *ServerConn) ReadListen(errorFn func(error), receiveFn func(*ServerConn,
 
 		// 必传uuid确认消息
 		if req.Uuid == "" {
-			if messageType == websocket.TextMessage {
-				c.SendTextJSON("", resp.CODE_ERROR, "message uuid is required", nil)
-			} else {
-				c.SendBinaryJSON("", resp.CODE_ERROR, "message uuid is required", nil)
-			}
+			c.SendRespJSON(messageType, "", resp.CODE_ERROR, "message uuid is required", nil)
 			return
 		}
 
@@ -217,52 +220,50 @@ func (c *ServerConn) ReadListen(errorFn func(error), receiveFn func(*ServerConn,
 			return
 		case "ping", "PING":
 			c.Pong()
-			if messageType == websocket.TextMessage {
-				c.SendTextJSON(req.Uuid, resp.CODE_SUCCESS, "PONG", nil)
-			} else {
-				c.SendBinaryJSON(req.Uuid, resp.CODE_SUCCESS, "PONG", nil)
-			}
+			c.SendRespJSON(messageType, req.Uuid, resp.CODE_SUCCESS, "PONG", nil)
 			continue
 		}
 		go receiveFn(c, messageType, req)
 	}
 }
 
-// WriteListen 客户端写入消息监听
+// WriteListen 服务端写入消息监听
 // conn.SendChan <- msgByte 写入消息
 //
 // errorFn 接收错误回调函数
 func (c *ServerConn) WriteListen(errorFn func(error)) {
 	defer func() {
+		c.Close()
 		if err := recover(); err != nil {
 			if errorFn != nil {
-				errorFn(fmt.Errorf("ws WriteMessage UID %s Panic Error: %v", c.BindUID, err))
+				errorFn(fmt.Errorf("ws WriteMessage ID %s Panic Error: %v", c.id, err))
 			}
 		}
 	}()
+	c.SendTextJSON("", websocket.PongMessage, c.id, nil)
 	// 消息发送监听
 	for msg := range c.SendChan {
 		// PONG句柄
 		if bytes.Equal(msg, []byte("ws:pong")) {
-			c.LastHeartbeat = time.Now().UnixMilli()
+			c.lastHeartbeat = time.Now().UnixMilli()
 			c.wsConn.WriteMessage(websocket.PongMessage, []byte{})
 			continue
 		}
 		// 关闭句柄
 		if bytes.Equal(msg, []byte("ws:close")) {
-			c.wsConn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+			closeMsg := websocket.FormatCloseMessage(websocket.CloseNormalClosure, "close")
+			c.wsConn.WriteMessage(websocket.CloseMessage, closeMsg)
 			return
 		}
 
 		// 发送消息
 		messageType := websocket.BinaryMessage
-		if utf8.Valid(msg) {
+		if parse.IsText(msg) {
 			messageType = websocket.TextMessage
 		}
-		err := c.wsConn.WriteMessage(messageType, msg)
-		if err != nil {
+		if err := c.wsConn.WriteMessage(messageType, msg); err != nil {
 			if errorFn != nil {
-				errorFn(fmt.Errorf("ws WriteMessage UID %s err: %s", c.BindUID, err.Error()))
+				errorFn(fmt.Errorf("ws WriteMessage ID %s Error: %v", c.id, err))
 			}
 			c.Close()
 			return

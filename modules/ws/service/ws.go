@@ -27,7 +27,7 @@ func ClientRemove(wsConn *ws.ServerConn) {
 
 // ClientSend 给已知客户端发消息
 // messageType 消息类型 websocket.TextMessage=1 websocket.BinaryMessage=2
-func ClientSend(clientID string, messageType int, data any) error {
+func ClientSend(clientID string, messageType int, data map[string]any) error {
 	v, ok := wsClientMap.Load(clientID)
 	if !ok {
 		return fmt.Errorf("no fount client ID: %s", clientID)

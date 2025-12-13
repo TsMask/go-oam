@@ -28,6 +28,14 @@
             "program": "examples/standalone/main.go",
             "console": "integratedTerminal",
             "args": ["--dev", "-c", "./dev/omc.yaml"]
-        }
+        },
+         {
+            "name": "测试 WS Client",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "examples/ws_client/main.go",
+            "console": "integratedTerminal",
+        },
     ]
 }

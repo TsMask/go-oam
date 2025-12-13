@@ -72,9 +72,7 @@ func (s TelnetController) Session(c *gin.Context) {
 		return
 	}
 
-	wsConn := ws.ServerConn{
-		BindUID: query.BindUID, // 绑定唯一标识ID
-	}
+	wsConn := ws.ServerConn{}
 	// 将 HTTP 连接升级为 WebSocket 连接
 	if err := wsConn.Upgrade(c.Writer, c.Request); err != nil {
 		c.JSON(422, resp.CodeMsg(resp.CODE_PARAM_CHEACK, err.Error()))
@@ -83,13 +81,9 @@ func (s TelnetController) Session(c *gin.Context) {
 	defer wsConn.Close()
 	go wsConn.WriteListen(nil)
 	go wsConn.ReadListen(nil, s.telnetService.Session)
-	// 发客户端id确认是否连接
-	wsConn.SendTextJSON("", resp.CODE_SUCCESS, resp.MSG_SUCCCESS, map[string]string{
-		"clientId": wsConn.ClientId(),
-	})
 
 	// 等待停止信号
-	for range wsConn.StopChan {
+	for range wsConn.CloseSignal() {
 		wsConn.Close()
 		return
 	}

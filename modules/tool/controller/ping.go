@@ -117,9 +117,7 @@ func (s PingController) Run(c *gin.Context) {
 	}
 	defer clientSession.Close()
 
-	wsConn := ws.ServerConn{
-		BindUID: query.BindUID, // 绑定唯一标识ID
-	}
+	wsConn := ws.ServerConn{}
 	// 将 HTTP 连接升级为 WebSocket 连接
 	if err := wsConn.Upgrade(c.Writer, c.Request); err != nil {
 		c.JSON(422, resp.CodeMsg(resp.CODE_PARAM_CHEACK, err.Error()))
@@ -129,10 +127,6 @@ func (s PingController) Run(c *gin.Context) {
 	wsConn.SetAnyConn(clientSession)
 	go wsConn.WriteListen(nil)
 	go wsConn.ReadListen(nil, s.pingService.Session)
-	// 发客户端id确认是否连接
-	wsConn.SendTextJSON("", resp.CODE_SUCCESS, resp.MSG_SUCCCESS, map[string]string{
-		"clientId": wsConn.ClientId(),
-	})
 
 	// 等待1秒，排空首次消息
 	time.Sleep(1 * time.Second)
@@ -148,7 +142,7 @@ func (s PingController) Run(c *gin.Context) {
 			if len(outputByte) > 0 {
 				wsConn.SendTextJSON(fmt.Sprintf("ping_%d", ms.UnixMilli()), resp.CODE_SUCCESS, string(outputByte), nil)
 			}
-		case <-wsConn.StopChan: // 等待停止信号
+		case <-wsConn.CloseSignal(): // 等待停止信号
 			wsConn.Close()
 			return
 		}

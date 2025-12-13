@@ -6,7 +6,23 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
+
+// IsText 判断字节切片是否为文本
+func IsText(data []byte) bool {
+	if !utf8.Valid(data) {
+		return false
+	}
+	// 即使是 valid utf8，也可能是二进制（巧合）。
+	// 检查是否有控制字符（除了 \n \r \t）
+	for _, r := range string(data) {
+		if r < 32 && r != '\n' && r != '\r' && r != '\t' {
+			return false
+		}
+	}
+	return true
+}
 
 // Number 解析数值型
 func Number(value any) int64 {
