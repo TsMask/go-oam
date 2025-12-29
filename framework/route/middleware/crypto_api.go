@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"strings"
+	"net/url"
 
 	"github.com/tsmask/go-oam/framework/route/resp"
 	"github.com/tsmask/go-oam/framework/utils/crypto"
@@ -76,11 +76,11 @@ func CryptoApi(opt CryptoApiOpt) gin.HandlerFunc {
 			if method == "GET" {
 				var urlParams map[string]any
 				json.Unmarshal([]byte(dataBodyStr), &urlParams)
-				rawQuery := []string{}
+				rawQuery := url.Values{}
 				for k, v := range urlParams {
-					rawQuery = append(rawQuery, fmt.Sprintf("%s=%v", k, v))
+					rawQuery.Add(k, fmt.Sprintf("%v", v))
 				}
-				c.Request.URL.RawQuery = strings.Join(rawQuery, "&")
+				c.Request.URL.RawQuery = rawQuery.Encode()
 			} else if contentType == gin.MIMEJSON {
 				c.Request.Body = io.NopCloser(bytes.NewBuffer([]byte(dataBodyStr)))
 			}
