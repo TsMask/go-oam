@@ -35,7 +35,7 @@ func (s SNMP) Session(conn *ws.ServerConn, messageType int, req *protocol.Reques
 		msgByte, _ := json.Marshal(req.Data)
 		if err := json.Unmarshal(msgByte, &data); err == nil {
 			output := callback.SNMP(data.Oid, data.OperType, data.Value)
-			conn.SendRespJSON(messageType, req.Uuid, resp.CODE_SUCCESS, resp.MSG_SUCCCESS, output)
+			conn.SendRespJSON(messageType, req.Uuid, resp.CODE_SUCCESS, resp.MSG_SUCCESS, output)
 		}
 	default:
 		conn.SendRespJSON(messageType, req.Uuid, resp.CODE_ERROR, fmt.Sprintf("message type %s not supported", req.Type), nil)

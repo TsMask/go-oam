@@ -35,6 +35,6 @@ func ReceiveCommon(conn *ws.ServerConn, messageType int, req *protocol.Request) 
 		conn.SendRespJSON(messageType, req.Uuid, resp.CODE_ERROR, err.Error(), nil)
 		return
 	}
-	conn.SendRespJSON(messageType, req.Uuid, resp.CODE_SUCCESS, resp.MSG_SUCCCESS, respData)
+	conn.SendRespJSON(messageType, req.Uuid, resp.CODE_SUCCESS, resp.MSG_SUCCESS, respData)
 
 }

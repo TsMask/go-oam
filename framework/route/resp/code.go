@@ -28,8 +28,8 @@ const (
 
 	// CODE_SUCCESS 响应-code正常成功
 	CODE_SUCCESS = 200001
-	// MSG_SUCCCESS 响应-msg正常成功
-	MSG_SUCCCESS = "success"
+	// MSG_SUCCESS 响应-msg正常成功
+	MSG_SUCCESS = "success"
 
 	// CODE_ERROR 响应-code错误失败
 	CODE_ERROR = 400001

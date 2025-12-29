@@ -16,7 +16,7 @@ func CodeMsg(code int, msg string) Resp {
 func Ok(v map[string]any) map[string]any {
 	args := make(map[string]any)
 	args["code"] = CODE_SUCCESS
-	args["msg"] = MSG_SUCCCESS
+	args["msg"] = MSG_SUCCESS
 	// v合并到args
 	for key, value := range v {
 		args[key] = value
@@ -31,7 +31,7 @@ func OkMsg(msg string) Resp {
 
 // OkData 响应成功结果数据
 func OkData(data any) Resp {
-	return Resp{Code: CODE_SUCCESS, Msg: MSG_SUCCCESS, Data: data}
+	return Resp{Code: CODE_SUCCESS, Msg: MSG_SUCCESS, Data: data}
 }
 
 // Err 响应失败结果 map[string]any{}

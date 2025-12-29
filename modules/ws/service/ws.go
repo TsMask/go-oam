@@ -38,6 +38,6 @@ func ClientSend(clientID string, messageType int, data map[string]any) error {
 		ClientRemove(conn)
 		return fmt.Errorf("msg chan over 90 will close client ID: %s", clientID)
 	}
-	conn.SendRespJSON(messageType, clientID, resp.CODE_SUCCESS, resp.MSG_SUCCCESS, data)
+	conn.SendRespJSON(messageType, clientID, resp.CODE_SUCCESS, resp.MSG_SUCCESS, data)
 	return nil
 }
