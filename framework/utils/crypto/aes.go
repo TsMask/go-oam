@@ -12,7 +12,7 @@ import (
 
 // AESEncryptBase64 AES加密转Base64字符串
 func AESEncryptBase64(text, key string) (string, error) {
-	if len(text) == 0 {
+	if text == "" {
 		return "", nil
 	}
 	xpass, err := AESEncrypt([]byte(text), []byte(key))
@@ -25,12 +25,12 @@ func AESEncryptBase64(text, key string) (string, error) {
 
 // AESDecryptBase64 AES解密解Base64字符串
 func AESDecryptBase64(text, key string) (string, error) {
-	if len(text) == 0 {
+	if text == "" {
 		return "", nil
 	}
 	bytesPass, err := base64.StdEncoding.DecodeString(text)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("base64 decode error: %w", err)
 	}
 	tpass, err := AESDecrypt(bytesPass, []byte(key))
 	if err != nil {
@@ -39,60 +39,84 @@ func AESDecryptBase64(text, key string) (string, error) {
 	return string(tpass), nil
 }
 
-// AESEncrypt AES加密
+// AESEncrypt AES加密 (CBC模式 + PKCS7填充)
+// 密文结构: IV (16 bytes) + Ciphertext
 func AESEncrypt(plaintext, aeskey []byte) ([]byte, error) {
 	block, err := aes.NewCipher(aeskey)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("aes key error: %w", err)
 	}
-	blockSize := aes.BlockSize
 
-	padding := blockSize - (len(plaintext) % blockSize)
-	padtext := bytes.Repeat([]byte{byte(padding)}, padding)
-	plaintext = append(plaintext, padtext...)
+	// PKCS7 填充
+	plaintext = pkcs7Padding(plaintext, aes.BlockSize)
 
-	ciphertext := make([]byte, blockSize+len(plaintext))
-	iv := ciphertext[:blockSize]
+	// 准备密文空间: IV + Plaintext
+	ciphertext := make([]byte, aes.BlockSize+len(plaintext))
+	iv := ciphertext[:aes.BlockSize]
 	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("generate iv error: %w", err)
 	}
 
 	mode := cipher.NewCBCEncrypter(block, iv)
-	mode.CryptBlocks(ciphertext[blockSize:], plaintext)
+	mode.CryptBlocks(ciphertext[aes.BlockSize:], plaintext)
 
 	return ciphertext, nil
 }
 
-// AESDecrypt AES解密
+// AESDecrypt AES解密 (CBC模式 + PKCS7填充)
 func AESDecrypt(ciphertext, aeskey []byte) ([]byte, error) {
-	blockSize := aes.BlockSize
-	if len(ciphertext) < blockSize {
+	if len(ciphertext) < aes.BlockSize {
 		return nil, fmt.Errorf("ciphertext too short")
 	}
 
-	iv := ciphertext[:blockSize]
-	ciphertext = ciphertext[blockSize:]
-	block, err := aes.NewCipher([]byte(aeskey))
-
+	block, err := aes.NewCipher(aeskey)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("aes key error: %w", err)
 	}
-	if len(ciphertext) == 0 {
-		return nil, fmt.Errorf("ciphertext is invalid")
-	}
-	if len(ciphertext)%blockSize != 0 {
+
+	iv := ciphertext[:aes.BlockSize]
+	data := ciphertext[aes.BlockSize:]
+
+	if len(data) == 0 || len(data)%aes.BlockSize != 0 {
 		return nil, fmt.Errorf("ciphertext is not a multiple of the block size")
 	}
 
+	// 创建副本避免修改原始数据
+	plaintext := make([]byte, len(data))
 	mode := cipher.NewCBCDecrypter(block, iv)
-	mode.CryptBlocks(ciphertext, ciphertext)
+	mode.CryptBlocks(plaintext, data)
 
 	// 去除填充
-	padding := int(ciphertext[len(ciphertext)-1])
-	if padding > blockSize || padding == 0 {
-		return nil, fmt.Errorf("invalid padding")
+	res, err := pkcs7UnPadding(plaintext)
+	if err != nil {
+		return nil, fmt.Errorf("unpadding error: %w", err)
 	}
-	ciphertext = ciphertext[:len(ciphertext)-padding]
 
-	return ciphertext, nil
+	return res, nil
+}
+
+// pkcs7Padding PKCS7 填充
+func pkcs7Padding(ciphertext []byte, blockSize int) []byte {
+	padding := blockSize - len(ciphertext)%blockSize
+	padtext := bytes.Repeat([]byte{byte(padding)}, padding)
+	return append(ciphertext, padtext...)
+}
+
+// pkcs7UnPadding PKCS7 去除填充
+func pkcs7UnPadding(plaintext []byte) ([]byte, error) {
+	length := len(plaintext)
+	if length == 0 {
+		return nil, fmt.Errorf("plaintext is empty")
+	}
+	unpadding := int(plaintext[length-1])
+	if unpadding > length || unpadding == 0 {
+		return nil, fmt.Errorf("invalid padding size")
+	}
+	// 校验所有填充字节是否一致
+	for i := length - unpadding; i < length; i++ {
+		if int(plaintext[i]) != unpadding {
+			return nil, fmt.Errorf("invalid padding bytes")
+		}
+	}
+	return plaintext[:(length - unpadding)], nil
 }
