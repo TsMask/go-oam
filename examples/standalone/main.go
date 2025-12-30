@@ -120,7 +120,7 @@ func main() {
 			oam.KPIKeySet("Test.A.03", float64(t.Second()))
 
 			// 刷新授权
-			oam.LicenseRrefresh(oam.License{
+			oam.LicenseRefresh(oam.License{
 				NeType:     "NE",
 				Version:    "1.0",
 				SerialNum:  "1234567890",

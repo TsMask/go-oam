@@ -50,7 +50,7 @@ func New(o *Opts) *Opts {
 	config.InitConfig()
 	// 网元License传入
 	if o.License.NeType != "" {
-		LicenseRrefresh(o.License)
+		LicenseRefresh(o.License)
 	}
 	// 文件上传配置
 	if o.Upload.FileDir != "" {
@@ -110,8 +110,8 @@ func (o *Opts) Run() error {
 	return modules.RouteService(o.setupArr)
 }
 
-// LicenseRrefresh 刷新网元License信息
-func LicenseRrefresh(lic License) {
+// LicenseRefresh 刷新网元License信息
+func LicenseRefresh(lic License) {
 	neConf, ok := config.Get("ne").(map[string]any)
 	if !ok {
 		return
