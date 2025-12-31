@@ -13,16 +13,18 @@ import (
 	"github.com/tsmask/go-oam/modules/tool/service"
 )
 
-// 实例化控制层 IPerfController 结构体
-var NewIPerf = &IPerfController{
-	iperfService: service.NewIPerf,
+// NewIPerfController 实例化控制层 IPerfController 结构体
+func NewIPerfController() *IPerfController {
+	return &IPerfController{
+		srv: service.NewIPerfService(),
+	}
 }
 
 // iperf 网络性能测试工具 https://iperf.fr/iperf-download.php
 //
 // PATH /tool/iperf
 type IPerfController struct {
-	iperfService *service.IPerf // IPerf3 网络性能测试工具服务
+	srv *service.IPerf // IPerf3 网络性能测试工具服务
 }
 
 // iperf 版本信息
@@ -30,15 +32,9 @@ type IPerfController struct {
 // GET /v
 //
 //	@Tags			tool/iperf
-//	@Accept			json
-//	@Produce		json
-//	@Param			version	query		string	true	"Version"	Enums(V2, V3)
-//	@Success		200		{object}	object	"Response Results"
-//	@Security		TokenAuth
 //	@Summary		iperf version information
-//	@Description	iperf version information
 //	@Router			/tool/iperf/v [get]
-func (s IPerfController) Version(c *gin.Context) {
+func (s *IPerfController) Version(c *gin.Context) {
 	var query struct {
 		Version string `form:"version" binding:"required,oneof=V2 V3"` // 版本
 	}
@@ -48,7 +44,7 @@ func (s IPerfController) Version(c *gin.Context) {
 		return
 	}
 
-	output, err := s.iperfService.Version(query.Version)
+	output, err := s.srv.Version(query.Version)
 	if err != nil {
 		c.JSON(200, resp.ErrMsg(err.Error()))
 		return
@@ -62,23 +58,12 @@ func (s IPerfController) Version(c *gin.Context) {
 // GET /run
 //
 //	@Tags			tool/iperf
-//	@Accept			json
-//	@Produce		json
-//	@Param			neType			query		string	true	"NE Type"					Enums(IMS,AMF,AUSF,UDM,SMF,PCF,NSSF,NRF,UPF,MME,CBC,oam,SGWC,SMSC)
-//	@Param			neId			query		string	true	"NE ID"						default(001)
-//	@Param			cols			query		number	false	"Terminal line characters"	default(120)
-//	@Param			rows			query		number	false	"Terminal display lines"	default(40)
-//	@Param			access_token	query		string	true	"Authorization"
-//	@Success		200				{object}	object	"Response Results"
-//	@Security		TokenAuth
 //	@Summary		(ws://) iperf software running
-//	@Description	(ws://) iperf software running
 //	@Router			/tool/iperf/run [get]
-func (s IPerfController) Run(c *gin.Context) {
+func (s *IPerfController) Run(c *gin.Context) {
 	var query struct {
-		BindUID string `form:"bindUid"  binding:"required"` // 绑定唯一标识
-		Cols    int    `form:"cols"`                        // 终端单行字符数
-		Rows    int    `form:"rows"`                        // 终端显示行数
+		Cols int `form:"cols"` // 终端单行字符数
+		Rows int `form:"rows"` // 终端显示行数
 	}
 	if err := c.ShouldBindQuery(&query); err != nil {
 		errMsgs := fmt.Sprintf("bind err: %s", resp.FormatBindError(err))
@@ -109,7 +94,7 @@ func (s IPerfController) Run(c *gin.Context) {
 	defer wsConn.Close()
 	wsConn.SetAnyConn(clientSession)
 	go wsConn.WriteListen(nil)
-	go wsConn.ReadListen(nil, s.iperfService.Session)
+	go wsConn.ReadListen(nil, s.srv.Session)
 
 	// 等待1秒，排空首次消息
 	time.Sleep(1 * time.Second)

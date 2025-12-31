@@ -12,25 +12,24 @@ import (
 	"github.com/tsmask/go-oam/modules/push/service"
 )
 
-// 实例化控制层 CommonController 结构体
-var NewCommon = &CommonController{}
+// NewCommonController 创建通用推送控制器
+func NewCommonController() *CommonController {
+	return &CommonController{srv: service.NewCommon()}
+}
 
 // 通用
 //
 // PATH /common
-type CommonController struct{}
+type CommonController struct {
+	srv *service.Common
+}
 
 // 通用历史记录
 //
 // GET /history?type=x
 //
 //	@Tags			Common
-//	@Accept			json
-//	@Produce		json
-//	@Success		200	{object}	object	"Response Results"
-//	@Security		TokenAuth
-//	@Summary		Common Server Information
-//	@Description	Common Server Information
+//	@Summary		Common History List
 //	@Router			/common/history [get]
 func (s CommonController) History(c *gin.Context) {
 	typeStr := c.Query("type")
@@ -39,7 +38,7 @@ func (s CommonController) History(c *gin.Context) {
 		return
 	}
 	n := parse.Number(c.Query("n"))
-	data := service.CommonHistoryList(typeStr, int(n))
+	data := s.srv.HistoryList(typeStr, int(n))
 	c.JSON(200, resp.OkData(data))
 }
 
@@ -48,12 +47,7 @@ func (s CommonController) History(c *gin.Context) {
 // GET /test
 //
 //	@Tags			Common
-//	@Accept			json
-//	@Produce		json
-//	@Success		200	{object}	object	"Response Results"
-//	@Security		TokenAuth
-//	@Summary		Common Server Information
-//	@Description	Common Server Information
+//	@Summary		Common Push Test
 //	@Router			/common/test [get]
 func (s CommonController) Test(c *gin.Context) {
 	var query struct {
@@ -67,7 +61,7 @@ func (s CommonController) Test(c *gin.Context) {
 		return
 	}
 
-	Common := model.Common{
+	common := model.Common{
 		NeUid: query.NeUID, //网元唯一标识
 		Type:  query.Type,  //类型
 		Data: map[string]any{
@@ -78,7 +72,7 @@ func (s CommonController) Test(c *gin.Context) {
 			"hax":   generate.String(12),
 		},
 	}
-	err := service.CommonPushURL(query.Url, &Common)
+	err := s.srv.PushURL(query.Url, &common)
 	if err != nil {
 		c.JSON(200, resp.ErrMsg(err.Error()))
 		return

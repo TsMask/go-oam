@@ -91,9 +91,9 @@ func (o *oamCallback) Redis() any {
 	// *redis.Client
 	return nil
 }
-// Telent implements callback.CallbackHandler.
-func (o *oamCallback) Telent(command string) string {
-	return "Telent implements"
+// Telnet implements callback.CallbackHandler.
+func (o *oamCallback) Telnet(command string) string {
+	return "Telnet implements"
 }
 // SNMP implements callback.CallbackHandler.
 func (o *oamCallback) SNMP(oid, operType string, value any) any {
@@ -105,20 +105,18 @@ func (o *oamCallback) Config(action, paramName, loc string, paramValue any) erro
 }
 
 // 加入OAM相关接口模块
-o := oam.New(&oam.Opts{
-  License: oam.License{
+o := oam.New(
+  oam.WithLicense(oam.License{
     NeType:     "NE",
     Version:    "1.0",
     SerialNum:  "1234567890",
     ExpiryDate: "2025-12-31",
     NbNumber:   10,
     UeNumber:   100,
-  },
-})
+  }),
+)
 o.SetupCallback(new(oamCallback))
-if err := o.RouteExpose(r); err != nil {
-  fmt.Printf("oam run fail: %s\n", err.Error())
-}
+o.SetupRoute(r)
 
 ```
 

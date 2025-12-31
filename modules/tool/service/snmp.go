@@ -10,19 +10,24 @@ import (
 	"github.com/tsmask/go-oam/modules/callback"
 )
 
-// 实例化服务层 SNMP 结构体
-var NewSNMP = &SNMP{}
+func NewSNMPService() *SNMP {
+	return &SNMP{}
+}
 
 // SNMP 终端命令交互工具 服务层处理
-type SNMP struct{}
+type SNMP struct {
+}
 
 // Command 执行单次命令 "1.3.6.1.4.1.1373.2.3.3.55.1"
-func (s SNMP) Command(oid, operType string, value any) any {
-	output := callback.SNMP(oid, operType, value)
+func (s SNMP) Command(handler callback.CallbackHandler, oid, operType string, value any) any {
+	if handler == nil {
+		return "snmp unrealized"
+	}
+	output := handler.SNMP(oid, operType, value)
 	return output
 }
 
-// SNMP 接收终端交互业务处理
+// Session 接收终端交互业务处理
 func (s SNMP) Session(conn *ws.ServerConn, messageType int, req *protocol.Request) {
 	switch req.Type {
 	case "snmp":
@@ -34,7 +39,12 @@ func (s SNMP) Session(conn *ws.ServerConn, messageType int, req *protocol.Reques
 		}
 		msgByte, _ := json.Marshal(req.Data)
 		if err := json.Unmarshal(msgByte, &data); err == nil {
-			output := callback.SNMP(data.Oid, data.OperType, data.Value)
+			handler := conn.GetAnyConn().(callback.CallbackHandler)
+			if handler == nil {
+				conn.SendRespJSON(messageType, req.Uuid, resp.CODE_ERROR, "callback unrealized", nil)
+				return
+			}
+			output := handler.SNMP(data.Oid, data.OperType, data.Value)
 			conn.SendRespJSON(messageType, req.Uuid, resp.CODE_SUCCESS, resp.MSG_SUCCESS, output)
 		}
 	default:

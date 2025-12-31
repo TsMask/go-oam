@@ -6,11 +6,12 @@ import (
 	"fmt"
 
 	"github.com/gorilla/websocket"
+	"github.com/tsmask/go-oam/framework/config"
 	"github.com/tsmask/go-oam/framework/utils/file"
 )
 
 // FileDownload 文件下载
-func FileDownload(messageType int, data []byte) (map[string]any, error) {
+func FileDownload(cfg *config.Config, messageType int, data []byte) (map[string]any, error) {
 	var body struct {
 		FilePath string `json:"filePath"`
 		Range    string `json:"range"`
@@ -21,7 +22,7 @@ func FileDownload(messageType int, data []byte) (map[string]any, error) {
 	if body.FilePath == "" {
 		return nil, fmt.Errorf("filePath must be set")
 	}
-	res, err := file.ReadUploadFileStream(body.FilePath, body.Range)
+	res, err := file.ReadUploadFileStream(cfg, body.FilePath, body.Range)
 	if err != nil {
 		return nil, err
 	}

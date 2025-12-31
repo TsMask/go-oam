@@ -17,7 +17,7 @@ func CopyFile(localPath, newPath string) error {
 	defer srcFile.Close()
 
 	// 如果目标目录不存在，创建它
-	if err := os.MkdirAll(filepath.Dir(newPath), os.ModePerm); err != nil {
+	if err = os.MkdirAll(filepath.Dir(newPath), os.ModePerm); err != nil {
 		return fmt.Errorf("failed to create destination directory: %v", err)
 	}
 

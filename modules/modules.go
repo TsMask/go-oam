@@ -1,44 +1,70 @@
 package modules
 
 import (
-	"github.com/tsmask/go-oam/framework/route"
-
-	"github.com/tsmask/go-oam/modules/common"
-	"github.com/tsmask/go-oam/modules/pull"
-	"github.com/tsmask/go-oam/modules/push"
-	"github.com/tsmask/go-oam/modules/state"
-	"github.com/tsmask/go-oam/modules/tool"
-	"github.com/tsmask/go-oam/modules/ws"
+	"fmt"
+	"log"
+	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/tsmask/go-oam/framework/config"
+	"github.com/tsmask/go-oam/framework/route"
 )
 
-// RouteSetup 路由装载，加入已有GIn
-func RouteSetup(router gin.IRouter) {
-	// 通用模块
-	common.SetupRoute(router)
-	// 工具模块
-	tool.SetupRoute(router)
-	// ws 模块
-	ws.SetupRoute(router)
-	// 状态模块
-	state.SetupRoute(router)
-	// 上报模块
-	push.SetupRoute(router)
-	// 下发模块
-	pull.SetupRoute(router)
+// NewRouter 创建路由引擎
+func NewRouter() *gin.Engine {
+	return route.Engine()
 }
 
-// RouteService 路由独立服务启动
-func RouteService(setupArr []func(gin.IRouter)) error {
-	router := route.Engine()
-	// 装载外部拓展
-	if len(setupArr) > 0 {
-		for _, setup := range setupArr {
-			setup(router)
+// RunServer 启动服务
+func RunServer(cfg *config.Config, router *gin.Engine) error {
+	var routeConfigs []config.RouteConfig
+	cfg.View(func(c *config.Config) {
+		routeConfigs = c.Route
+	})
+	if len(routeConfigs) == 0 {
+		return fmt.Errorf("route config not found")
+	}
+
+	var wg sync.WaitGroup
+	for _, v := range routeConfigs {
+		address := v.Addr
+		schema := v.Schema
+		if schema == "https" {
+			certFile := v.Cert
+			keyFile := v.Key
+			// 启动HTTPS服务
+			wg.Add(1)
+			go func(addr string, certFile string, keyFile string) {
+				defer wg.Done()
+				for i := range 10 {
+					if err := router.RunTLS(addr, certFile, keyFile); err != nil {
+						log.Printf("[OAM] route run https error, %s\n", err.Error())
+						log.Printf("[OAM] trying to restart HTTPS server on %s (Attempt %d)\n", addr, i)
+						// 等待指数退避的时间
+						backoffTime := time.Duration(1<<i) * time.Second // 2^i 秒
+						time.Sleep(backoffTime)
+					}
+				}
+			}(address, certFile, keyFile)
+		} else {
+			// 启动HTTP服务
+			wg.Add(1)
+			go func(address string) {
+				defer wg.Done()
+				for i := range 10 {
+					if err := router.Run(address); err != nil {
+						log.Printf("[OAM] route run http error, %s\n", err.Error())
+						log.Printf("[OAM] trying to restart HTTP server on %s (Attempt %d)\n", address, i)
+						// 等待指数退避的时间
+						backoffTime := time.Duration(1<<i) * time.Second // 2^i 秒
+						time.Sleep(backoffTime)
+					}
+				}
+			}(address)
 		}
 	}
-	// 路由装载
-	RouteSetup(router)
-	return route.Run(router)
+	wg.Wait()
+	return nil
 }

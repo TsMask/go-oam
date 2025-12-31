@@ -7,11 +7,12 @@ import (
 	"path/filepath"
 
 	"github.com/gorilla/websocket"
+	"github.com/tsmask/go-oam/framework/config"
 	"github.com/tsmask/go-oam/framework/utils/file"
 )
 
 // FileUpload 文件上传
-func FileUpload(messageType int, data []byte) (map[string]string, error) {
+func FileUpload(cfg *config.Config, messageType int, data []byte) (map[string]string, error) {
 	var body struct {
 		FileName string `json:"fileName"` // 文件名
 		File     []byte `json:"file"`     // 文件内容 文本消息是base64字符
@@ -33,7 +34,7 @@ func FileUpload(messageType int, data []byte) (map[string]string, error) {
 		bin = v
 	}
 
-	uploadFilePath, err := file.TransferUploadBytes(body.FileName, bin, []string{})
+	uploadFilePath, err := file.TransferUploadBytes(cfg, body.FileName, bin, []string{})
 	if err != nil {
 		return nil, err
 	}

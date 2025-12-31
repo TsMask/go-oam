@@ -8,6 +8,7 @@ import (
 
 	"github.com/tsmask/go-oam"
 
+	"github.com/tsmask/go-oam/framework/config"
 	"github.com/tsmask/go-oam/framework/telnet"
 )
 
@@ -19,16 +20,16 @@ func main() {
 	go func() {
 		defer wg.Done()
 
-		o := oam.New(&oam.Opts{
-			License: oam.License{
-				NeType:     "NE",
+		o := oam.New(
+			oam.WithNEConfig(config.NEConfig{
+				Type:       "NE",
 				Version:    "1.0",
 				SerialNum:  "12345678",
 				ExpiryDate: "2025-12-31",
 				NbNumber:   10,
 				UeNumber:   100,
-			},
-			ListenArr: []oam.Listen{
+			}),
+			oam.WithRouteConfig([]config.RouteConfig{
 				{
 					Addr:   "0.0.0.0:29565",
 					Schema: "http",
@@ -39,13 +40,13 @@ func main() {
 					Cert:   "./dev/certs/www.oam.net.crt",
 					Key:    "./dev/certs/www.oam.net.key",
 				},
-			},
-			Upload: oam.Upload{
+			}),
+			oam.WithUploadConfig(config.UploadConfig{
 				FileDir:   "/usr/local/etc/oam/upload",
 				FileSize:  5,
-				Whitelist: []string{".txt", ".jpg", ".png"},
-			},
-		})
+				WhiteList: []string{".txt", ".jpg", ".png"},
+			}),
+		)
 		if err := o.Run(); err != nil {
 			fmt.Printf("oam run fail: %s\n", err.Error())
 		}

@@ -10,8 +10,9 @@ import (
 	"github.com/tsmask/go-oam/framework/ws/protocol"
 )
 
-// 实例化服务层 SSH 结构体
-var NewSSH = &SSH{}
+func NewSSHService() *SSH {
+	return &SSH{}
+}
 
 // SSH 终端命令交互工具 服务层处理
 type SSH struct{}

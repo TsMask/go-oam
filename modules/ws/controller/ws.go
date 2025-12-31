@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/tsmask/go-oam/framework/route/reqctx"
 	"github.com/tsmask/go-oam/framework/route/resp"
 	"github.com/tsmask/go-oam/framework/ws"
 	"github.com/tsmask/go-oam/modules/ws/service"
@@ -12,24 +13,23 @@ import (
 )
 
 // NewWSController 实例化控制层 WSController 结构体
-var NewWSController = &WSController{}
+func NewWSController() *WSController {
+	return &WSController{srv: service.NewWS()}
+}
 
 // WSController WebSocket通信
 //
 // PATH /ws
-type WSController struct{}
+type WSController struct {
+	srv *service.WS
+}
 
 // WS 通用
 //
 // GET /
 //
 //	@Tags			ws
-//	@Accept			json
-//	@Produce		json
-//	@Param			bindUid	query		string	false	"绑定唯一标识"
-//	@Success		200				{object}	object	"Response Results"
 //	@Summary		(ws://) Generic
-//	@Description	(ws://) Generic
 //	@Router			/ws [get]
 func (s *WSController) WS(c *gin.Context) {
 	wsConn := ws.ServerConn{}
@@ -39,12 +39,14 @@ func (s *WSController) WS(c *gin.Context) {
 		return
 	}
 	defer wsConn.Close()
+	oamCfg := reqctx.OAMConfig(c)
+	wsConn.SetAnyConn(oamCfg)
 	go wsConn.WriteListen(nil)
 	go wsConn.ReadListen(nil, service.ReceiveCommon)
 
 	// 记录客户端
-	service.ClientAdd(&wsConn)
-	defer service.ClientRemove(&wsConn)
+	s.srv.ClientAdd(&wsConn)
+	defer s.srv.ClientRemove(&wsConn)
 
 	// 等待停止信号
 	for range wsConn.CloseSignal() {
@@ -66,7 +68,7 @@ func (s *WSController) Test(c *gin.Context) {
 		messageType = websocket.BinaryMessage
 	}
 	if clientId != "" {
-		err := service.ClientSend(clientId, messageType, map[string]any{
+		err := s.srv.ClientSend(clientId, messageType, map[string]any{
 			"msgType": msgType,
 			"time":    time.Now().Format(time.RFC3339),
 		})

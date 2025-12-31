@@ -3,6 +3,7 @@ module github.com/tsmask/go-oam
 go 1.24
 
 require (
+	dario.cat/mergo v1.0.2
 	github.com/creack/pty v1.1.24
 	github.com/gin-gonic/gin v1.11.0
 	github.com/go-resty/resty/v2 v2.17.0

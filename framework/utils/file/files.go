@@ -6,8 +6,8 @@ import (
 	"sort"
 )
 
-// FileListRow 文件列表行数据
-type FileListRow struct {
+// SystemFileListRow 文件列表行数据
+type SystemFileListRow struct {
 	FileType     string `json:"fileType"`     // 文件类型 dir, file, symlink
 	FileMode     string `json:"fileMode"`     // 文件的权限
 	LinkCount    int64  `json:"linkCount"`    // 硬链接数目
@@ -18,12 +18,12 @@ type FileListRow struct {
 	FileName     string `json:"fileName"`     // 文件的名称
 }
 
-// 文件列表
+// SystemFileList 获取系统文件列表
 // search 文件名后模糊*
 //
 // return 行记录，异常
-func FileList(path, search string) ([]FileListRow, error) {
-	var rows []FileListRow
+func SystemFileList(path, search string) ([]SystemFileListRow, error) {
+	var rows []SystemFileListRow
 
 	// 构建搜索模式
 	pattern := "*"
@@ -63,7 +63,7 @@ func FileList(path, search string) ([]FileListRow, error) {
 		linkCount, owner, group := getFileInfo(info)
 
 		// 组装文件信息
-		rows = append(rows, FileListRow{
+		rows = append(rows, SystemFileListRow{
 			FileMode:     info.Mode().String(),
 			FileType:     fileType,
 			LinkCount:    linkCount,

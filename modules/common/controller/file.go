@@ -6,14 +6,17 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"github.com/tsmask/go-oam/framework/route/reqctx"
 	"github.com/tsmask/go-oam/framework/route/resp"
 	"github.com/tsmask/go-oam/framework/utils/file"
 
 	"github.com/gin-gonic/gin"
 )
 
-// 实例化控制层 FileController 结构体
-var NewFile = &FileController{}
+// NewFileController 实例化控制层 FileController 结构体
+func NewFileController() *FileController {
+	return &FileController{}
+}
 
 // 文件操作处理
 //
@@ -34,6 +37,7 @@ type FileController struct{}
 //	@Description	Upload a file, interface param use <fileName>
 //	@Router			/file/upload [post]
 func (s *FileController) Upload(c *gin.Context) {
+	oamCfg := reqctx.OAMConfig(c)
 	// 上传的文件
 	formFile, err := c.FormFile("file")
 	if err != nil {
@@ -43,7 +47,7 @@ func (s *FileController) Upload(c *gin.Context) {
 	}
 
 	// 上传文件转存
-	uploadFilePath, err := file.TransferUploadFile(formFile, []string{})
+	uploadFilePath, err := file.TransferUploadFile(oamCfg, formFile, []string{})
 	if err != nil {
 		c.JSON(200, resp.ErrMsg(err.Error()))
 		return
@@ -70,6 +74,7 @@ func (s *FileController) Upload(c *gin.Context) {
 //	@Description	Slice file checking
 //	@Router			/file/chunk-check [post]
 func (s *FileController) ChunkCheck(c *gin.Context) {
+	oamCfg := reqctx.OAMConfig(c)
 	var body struct {
 		Identifier string `json:"identifier" binding:"required"` // 唯一标识
 		FileName   string `json:"fileName" binding:"required"`   // 文件名
@@ -81,7 +86,7 @@ func (s *FileController) ChunkCheck(c *gin.Context) {
 	}
 
 	// 读取标识目录
-	chunks, err := file.ChunkCheckFile(body.Identifier, body.FileName)
+	chunks, err := file.ChunkCheckFile(oamCfg, body.Identifier, body.FileName)
 	if err != nil {
 		c.JSON(200, resp.ErrMsg(err.Error()))
 		return
@@ -103,6 +108,7 @@ func (s *FileController) ChunkCheck(c *gin.Context) {
 //	@Description	Slice file merge
 //	@Router			/file/chunk-merge [post]
 func (s *FileController) ChunkMerge(c *gin.Context) {
+	oamCfg := reqctx.OAMConfig(c)
 	var body struct {
 		Identifier string `json:"identifier" binding:"required"` // 唯一标识
 		FileName   string `json:"fileName" binding:"required"`   // 文件名
@@ -114,7 +120,7 @@ func (s *FileController) ChunkMerge(c *gin.Context) {
 	}
 
 	// 切片文件合并
-	mergeFilePath, err := file.ChunkMergeFile(body.Identifier, body.FileName)
+	mergeFilePath, err := file.ChunkMergeFile(oamCfg, body.Identifier, body.FileName)
 	if err != nil {
 		c.JSON(200, resp.ErrMsg(err.Error()))
 		return
@@ -143,6 +149,7 @@ func (s *FileController) ChunkMerge(c *gin.Context) {
 //	@Description	Sliced file upload
 //	@Router			/file/chunk-upload [post]
 func (s *FileController) ChunkUpload(c *gin.Context) {
+	oamCfg := reqctx.OAMConfig(c)
 	// 切片编号
 	index := c.PostForm("index")
 	// 切片唯一标识
@@ -159,7 +166,7 @@ func (s *FileController) ChunkUpload(c *gin.Context) {
 	}
 
 	// 上传文件转存
-	chunkFilePath, err := file.TransferChunkUploadFile(formFile, index, identifier)
+	chunkFilePath, err := file.TransferChunkUploadFile(oamCfg, formFile, index, identifier)
 	if err != nil {
 		c.JSON(200, resp.ErrMsg(err.Error()))
 		return
@@ -201,12 +208,12 @@ func (s *FileController) List(c *gin.Context) {
 	if runtime.GOOS == "windows" {
 		localFilePath = fmt.Sprintf("C:%s", localFilePath)
 	}
-	rows, err := file.FileList(localFilePath, querys.Search)
+	rows, err := file.UploadFileList(localFilePath, querys.Search)
 	if err != nil {
 		c.JSON(200, resp.OkData(map[string]any{
 			"path":  querys.Path,
 			"total": len(rows),
-			"rows":  []file.FileListRow{},
+			"rows":  []file.UploadFileListRow{},
 		}))
 		return
 	}
@@ -215,9 +222,9 @@ func (s *FileController) List(c *gin.Context) {
 	lenNum := int64(len(rows))
 	start := (querys.PageNum - 1) * querys.PageSize
 	end := start + querys.PageSize
-	var splitRows []file.FileListRow
+	var splitRows []file.UploadFileListRow
 	if start >= lenNum {
-		splitRows = []file.FileListRow{}
+		splitRows = []file.UploadFileListRow{}
 	} else if end >= lenNum {
 		splitRows = rows[start:]
 	} else {

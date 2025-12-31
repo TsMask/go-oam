@@ -6,24 +6,36 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/tsmask/go-oam/framework/route/resp"
 	"github.com/tsmask/go-oam/framework/ws"
 	"github.com/tsmask/go-oam/framework/ws/protocol"
 	"github.com/tsmask/go-oam/modules/callback"
 )
 
-// 实例化服务层 Redis 结构体
-var NewRedis = &Redis{}
+func NewRedisService() *Redis {
+	return &Redis{}
+}
 
 // Redis 终端命令交互工具 服务层处理
-type Redis struct{}
+type Redis struct {
+}
 
 // Command 执行单次命令 "GET key"
-func (s Redis) Command(cmd string) (any, error) {
-	conn, err := callback.Redis()
-	if err != nil {
-		return "", err
+func (s *Redis) Command(handler callback.CallbackHandler, cmd string) (any, error) {
+	if handler == nil {
+		return "", fmt.Errorf("callback unrealized")
 	}
+	rdb := handler.Redis()
+	if rdb == nil {
+		return "", fmt.Errorf("redis client not connected")
+	}
+
+	client, ok := rdb.(*redis.Client)
+	if !ok {
+		return "", fmt.Errorf("redis client type error")
+	}
+
 	// 写入命令
 	cmdArr := strings.Fields(cmd)
 	if len(cmdArr) == 0 {
@@ -34,7 +46,7 @@ func (s Redis) Command(cmd string) (any, error) {
 	for _, v := range cmdArr {
 		args = append(args, v)
 	}
-	return conn.Do(context.Background(), args...).Result()
+	return client.Do(context.Background(), args...).Result()
 }
 
 // Session 接收终端交互业务处理
@@ -47,7 +59,12 @@ func (s Redis) Session(conn *ws.ServerConn, messageType int, req *protocol.Reque
 			conn.SendRespJSON(messageType, req.Uuid, resp.CODE_ERROR, "redis command is empty", nil)
 			return
 		}
-		output, outerr := s.Command(command)
+		handler := conn.GetAnyConn().(callback.CallbackHandler)
+		if handler == nil {
+			conn.SendRespJSON(messageType, req.Uuid, resp.CODE_ERROR, "callback unrealized", nil)
+			return
+		}
+		output, outerr := s.Command(handler, command)
 		dataStr := ""
 		if outerr != nil {
 			dataStr = fmt.Sprintf("%s \r\n", outerr.Error())

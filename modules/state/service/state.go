@@ -17,23 +17,23 @@ import (
 
 	"github.com/tsmask/go-oam/framework/cmd"
 	"github.com/tsmask/go-oam/framework/config"
-	"github.com/tsmask/go-oam/framework/utils/parse"
 	"github.com/tsmask/go-oam/modules/callback"
 	"github.com/tsmask/go-oam/modules/state/model"
 )
 
-// 实例化服务层 State 结构体
-var NewState = &State{}
+func NewStateService() *State {
+	return &State{}
+}
 
 // State 服务器系统相关信息 服务层处理
 type State struct{}
 
 // Info 系统信息
-func (s *State) Info() model.State {
+func (s *State) Info(cfg *config.Config, handler callback.CallbackHandler) model.State {
 	state := model.State{
 		OsInfo:    getUnameStr(),
 		IpAddr:    getIPAddr(),
-		Standby:   callback.Standby(),
+		Standby:   s.Standby(handler),
 		DiskSpace: getDiskSpace(),
 	}
 
@@ -42,23 +42,31 @@ func (s *State) Info() model.State {
 		hostName = ""
 	}
 	state.HostName = hostName
+	var pid int32
 
-	var pid int32 = 0
-	neConf, ok := config.Get("ne").(map[string]any)
-	if ok {
-		state.Version = fmt.Sprint(neConf["version"])
-		state.SerialNum = fmt.Sprint(neConf["serialnum"])
-		state.ExpiryDate = fmt.Sprint(neConf["expirydate"])
-		state.Capability = parse.Number(neConf["uenumber"])
-		pid = int32(parse.Number(neConf["pid"]))
-	}
-	if pid == 0 {
+	cfg.View(func(c *config.Config) {
+		state.Version = c.NE.Version
+		state.SerialNum = c.NE.SerialNum
+		state.ExpiryDate = c.NE.ExpiryDate
+		state.Capability = int64(c.NE.UeNumber)
+		pid = int32(c.NE.Pid)
+	})
+
+	if pid != 0 {
 		pid = int32(os.Getpid())
 	}
 	memUsage, cpuUsage := getMemAndCPUUsage(pid)
 	state.CpuUsage = cpuUsage
 	state.MemUsage = memUsage
 	return state
+}
+
+// Standby 备用状态
+func (s *State) Standby(handler callback.CallbackHandler) bool {
+	if handler != nil {
+		return handler.Standby()
+	}
+	return false
 }
 
 // 获取主机的 IP 地址列表
@@ -97,93 +105,73 @@ func getUnameStr() string {
 	if runtime.GOOS == "windows" {
 		info, err := host.Info()
 		if err != nil {
-			info.Platform = err.Error()
+			return err.Error()
 		}
-		if err != nil {
-			return ""
-		}
-		return info.PlatformVersion
+		return fmt.Sprintf("%s %s %s", info.OS, info.Platform, info.PlatformVersion)
 	}
-	osInfo, err := cmd.Exec("uname -a")
+	uname, err := cmd.Exec("uname -a")
 	if err != nil {
 		return ""
 	}
-	return strings.TrimSpace(osInfo)
+	return uname
 }
 
-// getMemAndCPUUsage 获取进程的内存和CPU占用率
+// getMemAndCPUUsage 获取内存和CPU使用率
 func getMemAndCPUUsage(pid int32) (model.MemUsage, model.CpuUsage) {
-	m := model.MemUsage{}
-	c := model.CpuUsage{}
+	memUsage := model.MemUsage{}
+	cpuUsage := model.CpuUsage{}
 
-	// system RAM(KB)
-	sysRam, err := mem.VirtualMemory()
+	p, err := process.NewProcess(pid)
 	if err != nil {
-		m.TotalMem = 0
-		m.SysMemUsage = 0
-	} else {
-		m.TotalMem = sysRam.Total / 1024
-		m.SysMemUsage = uint64(sysRam.UsedPercent * 100)
-	}
-	// system cpu percent
-	totalPercent, err := cpu.Percent(300*time.Millisecond, true)
-	if err != nil {
-		c.SysCpuUsage = 0
-	} else {
-		var sum float64
-		for _, corePercent := range totalPercent {
-			sum += corePercent
-		}
-		// 计算平均使用率
-		avgPercent := sum / float64(len(totalPercent))
-		c.SysCpuUsage = uint16(avgPercent * 100)
+		return memUsage, cpuUsage
 	}
 
-	// 根据PID取得进程资源
-	proc, err := process.NewProcess(pid)
-	if err != nil {
-		return m, c
+	// 进程 CPU 使用率
+	if percent, err := p.CPUPercent(); err == nil {
+		cpuUsage.NfCpuUsage = uint16(percent * 100)
 	}
-	// pid RAM(KB)
-	myRam, err := proc.MemoryInfo()
-	if err != nil {
-		m.NfUsedMem = 0
-	} else {
-		m.NfUsedMem = myRam.RSS / 1024
+
+	// 进程内存使用量
+	if memInfo, err := p.MemoryInfo(); err == nil {
+		memUsage.NfUsedMem = memInfo.RSS / 1024 // KB
 	}
-	// pid cpu percent
-	percent, err := proc.CPUPercent()
-	if err != nil {
-		c.NfCpuUsage = 0
-	} else {
-		c.NfCpuUsage = uint16(percent * 100)
+
+	// 系统 CPU 使用率
+	if sysCpuPercents, err := cpu.Percent(0, false); err == nil && len(sysCpuPercents) > 0 {
+		cpuUsage.SysCpuUsage = uint16(sysCpuPercents[0] * 100)
 	}
-	return m, c
+
+	// 系统内存使用率
+	if vm, err := mem.VirtualMemory(); err == nil {
+		memUsage.TotalMem = vm.Total / 1024 // KB
+		memUsage.SysMemUsage = uint64(vm.UsedPercent * 100)
+	}
+
+	return memUsage, cpuUsage
 }
 
-// getDiskSpace 获取磁盘空间信息
+// getDiskSpace 获取磁盘空间
 func getDiskSpace() model.DiskSpace {
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, 300*time.Millisecond)
 	defer cancel()
 
-	partitions, err := disk.PartitionsWithContext(ctx, false)
-	if err != nil && err != context.DeadlineExceeded {
-		return model.DiskSpace{}
+	ds := model.DiskSpace{}
+	parts, err := disk.PartitionsWithContext(ctx, false)
+	if err != nil {
+		return ds
 	}
 
-	ds := model.DiskSpace{}
-	for _, partition := range partitions {
-		usage, err := disk.Usage(partition.Mountpoint)
-		if err != nil {
-			continue
+	ds.PartitionNum = uint8(len(parts))
+	for _, part := range parts {
+		usage, err := disk.Usage(part.Mountpoint)
+		if err == nil {
+			ds.PartitionInfo = append(ds.PartitionInfo, model.PartitionInfo{
+				Device: part.Device,
+				Total:  usage.Total / 1024 / 1024, // MB
+				Used:   usage.Used / 1024 / 1024,  // MB
+			})
 		}
-		ds.PartitionNum++
-		ds.PartitionInfo = append(ds.PartitionInfo, model.PartitionInfo{
-			Total:  usage.Total / 1024 / 1024,
-			Used:   usage.Used / 1024 / 1024,
-			Device: partition.Device,
-		})
 	}
 	return ds
 }

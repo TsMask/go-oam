@@ -5,37 +5,34 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/tsmask/go-oam/framework/route/reqctx"
 	"github.com/tsmask/go-oam/framework/route/resp"
 	"github.com/tsmask/go-oam/framework/ws"
 	"github.com/tsmask/go-oam/modules/tool/service"
 )
 
-// 实例化控制层 RedisController 结构体
-var NewRedis = &RedisController{
-	redisService: service.NewRedis,
+// NewRedisController 实例化控制层 RedisController 结构体
+func NewRedisController() *RedisController {
+	return &RedisController{
+		srv: service.NewRedisService(),
+	}
 }
 
 // Redis
 //
 // PATH /tool/redis
 type RedisController struct {
-	redisService *service.Redis // Redis 命令交互工具服务
+	srv *service.Redis // Redis 命令交互工具服务
 }
 
 // Redis 命令执行
 //
 // POST /command
 //
-//	@Tags			tool/Redis
-//	@Accept			json
-//	@Produce		json
-//	@Param			command	query		string	true	"Command"
-//	@Success		200		{object}	object	"Response Results"
-//	@Security		TokenAuth
+//	@Tags			tool/redis
 //	@Summary		Redis run
-//	@Description	Redis run
 //	@Router			/tool/redis/command [post]
-func (s RedisController) Command(c *gin.Context) {
+func (s *RedisController) Command(c *gin.Context) {
 	var body struct {
 		Command string `form:"command" binding:"required"` // 命令
 	}
@@ -45,7 +42,8 @@ func (s RedisController) Command(c *gin.Context) {
 		return
 	}
 
-	output, err := s.redisService.Command(body.Command)
+	oamCallback := reqctx.OAMCallback(c)
+	output, err := s.srv.Command(oamCallback, body.Command)
 	if err != nil {
 		c.JSON(200, resp.ErrMsg(err.Error()))
 		return
@@ -57,23 +55,24 @@ func (s RedisController) Command(c *gin.Context) {
 //
 // GET /session
 //
-//	@Tags			tool/Redis
-//	@Accept			json
-//	@Produce		json
-//	@Param			bindUid			query		string	true	"绑定唯一标识"						default(001)
-//	@Success		200				{object}	object	"Response Results"
-//	@Security		TokenAuth
+//	@Tags			tool/redis
 //	@Summary		(ws://) Redis endpoint session
-//	@Description	(ws://) Redis endpoint session
 //	@Router			/tool/redis/session [get]
-func (s RedisController) Session(c *gin.Context) {
+func (s *RedisController) Session(c *gin.Context) {
 	var query struct {
-		BindUID string `form:"bindUid"  binding:"required"` // 绑定唯一标识
+		Cols int `form:"cols"` // 终端单行字符数
+		Rows int `form:"rows"` // 终端显示行数
 	}
 	if err := c.ShouldBindQuery(&query); err != nil {
 		errMsgs := fmt.Sprintf("bind err: %s", resp.FormatBindError(err))
 		c.JSON(422, resp.CodeMsg(resp.CODE_PARAM_PARSER, errMsgs))
 		return
+	}
+	if query.Cols == 0 {
+		query.Cols = 120
+	}
+	if query.Rows == 0 {
+		query.Rows = 40
 	}
 
 	wsConn := ws.ServerConn{}
@@ -83,8 +82,10 @@ func (s RedisController) Session(c *gin.Context) {
 		return
 	}
 	defer wsConn.Close()
+	oamCallback := reqctx.OAMCallback(c)
+	wsConn.SetAnyConn(oamCallback)
 	go wsConn.WriteListen(nil)
-	go wsConn.ReadListen(nil, s.redisService.Session)
+	go wsConn.ReadListen(nil, s.srv.Session)
 
 	// 等待停止信号
 	for range wsConn.CloseSignal() {

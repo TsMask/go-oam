@@ -11,29 +11,28 @@ import (
 	"github.com/tsmask/go-oam/modules/push/service"
 )
 
-// 实例化控制层 KPI Controller 结构体
-var NewKPI = &KPIController{}
+// NewKPIController 创建 KPI 控制器
+func NewKPIController(srv *service.KPI) *KPIController {
+	return &KPIController{srv: srv}
+}
 
 // 指标
 //
 // PATH /kpi
-type KPIController struct{}
+type KPIController struct {
+	srv *service.KPI
+}
 
 // 指标历史记录
 //
 // GET /history
 //
 //	@Tags			KPI
-//	@Accept			json
-//	@Produce		json
-//	@Success		200	{object}	object	"Response Results"
-//	@Security		TokenAuth
-//	@Summary		KPI Server Information
-//	@Description	KPI Server Information
+//	@Summary		KPI History List
 //	@Router			/kpi/history [get]
 func (s KPIController) History(c *gin.Context) {
 	n := parse.Number(c.Query("n"))
-	data := service.KPIHistoryList(int(n))
+	data := s.srv.HistoryList(int(n))
 	c.JSON(200, resp.OkData(data))
 }
 
@@ -42,12 +41,7 @@ func (s KPIController) History(c *gin.Context) {
 // GET /test
 //
 //	@Tags			KPI
-//	@Accept			json
-//	@Produce		json
-//	@Success		200	{object}	object	"Response Results"
-//	@Security		TokenAuth
-//	@Summary		KPI Server Information
-//	@Description	KPI Server Information
+//	@Summary		KPI Push Test
 //	@Router			/kpi/test [get]
 func (s KPIController) Test(c *gin.Context) {
 	var query struct {
@@ -60,7 +54,7 @@ func (s KPIController) Test(c *gin.Context) {
 		return
 	}
 
-	err := service.KPISend(query.Url, query.NeUID, 1, map[string]float64{
+	err := s.srv.Send(query.Url, query.NeUID, 1, map[string]float64{
 		"Test.01": 10,
 		"Test.02": float64(time.Now().Second()),
 	})

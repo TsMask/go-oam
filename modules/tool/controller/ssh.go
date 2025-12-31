@@ -13,16 +13,18 @@ import (
 	"github.com/tsmask/go-oam/modules/tool/service"
 )
 
-// 实例化控制层 SSHController 结构体
-var NewSSH = &SSHController{
-	sshService: service.NewSSH,
+// NewSSHController 实例化控制层 SSHController 结构体
+func NewSSHController() *SSHController {
+	return &SSHController{
+		srv: service.NewSSHService(),
+	}
 }
 
 // SSH
 //
 // PATH /tool/ssh
 type SSHController struct {
-	sshService *service.SSH // SSH  终端命令交互工具服务
+	srv *service.SSH // SSH  终端命令交互工具服务
 }
 
 // SSH 命令执行
@@ -30,15 +32,9 @@ type SSHController struct {
 // POST /command
 //
 //	@Tags			tool/SSH
-//	@Accept			json
-//	@Produce		json
-//	@Param			command	query		string	true	"Command"
-//	@Success		200		{object}	object	"Response Results"
-//	@Security		TokenAuth
 //	@Summary		SSH run
-//	@Description	SSH run
 //	@Router			/tool/ssh/command [post]
-func (s SSHController) Command(c *gin.Context) {
+func (s *SSHController) Command(c *gin.Context) {
 	var body struct {
 		Command string `form:"command" binding:"required"` // 命令
 	}
@@ -62,22 +58,12 @@ func (s SSHController) Command(c *gin.Context) {
 // GET /session
 //
 //	@Tags			tool/SSH
-//	@Accept			json
-//	@Produce		json
-//	@Param			bindUid			query		string	true	"绑定唯一标识"						default(001)
-//	@Param			cols			query		number	false	"Terminal line characters"	default(120)
-//	@Param			rows			query		number	false	"Terminal display lines"	default(40)
-//	@Param			access_token	query		string	true	"Authorization"
-//	@Success		200				{object}	object	"Response Results"
-//	@Security		TokenAuth
 //	@Summary		(ws://) SSH endpoint session
-//	@Description	(ws://) SSH endpoint session
 //	@Router			/tool/ssh/session [get]
-func (s SSHController) Session(c *gin.Context) {
+func (s *SSHController) Session(c *gin.Context) {
 	var query struct {
-		BindUID string `form:"bindUid"  binding:"required"` // 绑定唯一标识
-		Cols    int    `form:"cols"`                        // 终端单行字符数
-		Rows    int    `form:"rows"`                        // 终端显示行数
+		Cols int `form:"cols"` // 终端单行字符数
+		Rows int `form:"rows"` // 终端显示行数
 	}
 	if err := c.ShouldBindQuery(&query); err != nil {
 		errMsgs := fmt.Sprintf("bind err: %s", resp.FormatBindError(err))
@@ -108,7 +94,7 @@ func (s SSHController) Session(c *gin.Context) {
 	defer wsConn.Close()
 	wsConn.SetAnyConn(clientSession)
 	go wsConn.WriteListen(nil)
-	go wsConn.ReadListen(nil, s.sshService.Session)
+	go wsConn.ReadListen(nil, s.srv.Session)
 
 	// 等待1秒，排空首次消息
 	time.Sleep(1 * time.Second)

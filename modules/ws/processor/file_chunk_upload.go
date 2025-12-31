@@ -7,11 +7,12 @@ import (
 	"path/filepath"
 
 	"github.com/gorilla/websocket"
+	"github.com/tsmask/go-oam/framework/config"
 	"github.com/tsmask/go-oam/framework/utils/file"
 )
 
 // FileChunkUpload 文件分片上传
-func FileChunkUpload(messageType int, data []byte) (map[string]string, error) {
+func FileChunkUpload(cfg *config.Config, messageType int, data []byte) (map[string]string, error) {
 	var body struct {
 		FileName   string `json:"fileName"`   // 文件名
 		Identifier string `json:"identifier"` // 分片标识
@@ -37,7 +38,7 @@ func FileChunkUpload(messageType int, data []byte) (map[string]string, error) {
 		bin = v
 	}
 
-	chunkFilePath, err := file.TransferChunkUploadBytes(body.FileName, body.Index, body.Identifier, bin)
+	chunkFilePath, err := file.TransferChunkUploadBytes(cfg, body.FileName, body.Index, body.Identifier, bin)
 	if err != nil {
 		return nil, err
 	}

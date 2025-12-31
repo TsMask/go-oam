@@ -12,29 +12,28 @@ import (
 	"github.com/tsmask/go-oam/modules/push/service"
 )
 
-// 实例化控制层 NBStateController 结构体
-var NewNBState = &NBStateController{}
+// NewNBStateController 创建基站状态控制器
+func NewNBStateController() *NBStateController {
+	return &NBStateController{srv: service.NewNBState()}
+}
 
 // 基站状态
 //
 // PATH /push/nb/state
-type NBStateController struct{}
+type NBStateController struct {
+	srv *service.NBState
+}
 
 // 基站状态历史记录
 //
 // GET /history
 //
 //	@Tags			NBState
-//	@Accept			json
-//	@Produce		json
-//	@Success		200	{object}	object	"Response Results"
-//	@Security		TokenAuth
-//	@Summary		NBState Server Information
-//	@Description	NBState Server Information
+//	@Summary		NBState History List
 //	@Router			/push/nb/state/history [get]
 func (s NBStateController) History(c *gin.Context) {
 	n := parse.Number(c.Query("n"))
-	data := service.NBStateHistoryList(int(n))
+	data := s.srv.HistoryList(int(n))
 	c.JSON(200, resp.OkData(data))
 }
 
@@ -43,12 +42,7 @@ func (s NBStateController) History(c *gin.Context) {
 // GET /test
 //
 //	@Tags			NBState
-//	@Accept			json
-//	@Produce		json
-//	@Success		200	{object}	object	"Response Results"
-//	@Security		TokenAuth
-//	@Summary		NBState Server Information
-//	@Description	NBState Server Information
+//	@Summary		NBState Push Test
 //	@Router			/push/nb/state/test [get]
 func (s NBStateController) Test(c *gin.Context) {
 	var query struct {
@@ -71,7 +65,7 @@ func (s NBStateController) Test(c *gin.Context) {
 		Name:       "TestName",                 // 基站名称 网元标记
 		Position:   "TestPosition",             // 基站位置 网元标记
 	}
-	err := service.NBStatePushURL(query.Url, &nbState)
+	err := s.srv.PushURL(query.Url, &nbState)
 	if err != nil {
 		c.JSON(200, resp.ErrMsg(err.Error()))
 		return

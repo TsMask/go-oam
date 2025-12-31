@@ -5,22 +5,26 @@ import (
 	"time"
 
 	"github.com/tsmask/go-oam"
+	"github.com/tsmask/go-oam/framework/config"
+	"github.com/tsmask/go-oam/modules/common"
+	"github.com/tsmask/go-oam/modules/push"
+	"github.com/tsmask/go-oam/modules/state"
 
 	"github.com/gin-gonic/gin"
 )
 
 // 独立运行
 func main() {
-	o := oam.New(&oam.Opts{
-		License: oam.License{
-			NeType:     "NE",
+	o := oam.New(
+		oam.WithNEConfig(config.NEConfig{
+			Type:       "NE",
 			Version:    "1.0",
 			SerialNum:  "1234567890",
 			ExpiryDate: "2025-12-31",
 			NbNumber:   10,
 			UeNumber:   100,
-		},
-	})
+		}),
+	)
 
 	// 周期模拟
 	duration := 5 * time.Second
@@ -37,7 +41,7 @@ func main() {
 					"commonTime":   t.UnixMilli(),
 				},
 			}
-			commonErr := oam.CommonPush(&common)
+			commonErr := o.Push.Common(&common)
 			if commonErr != nil {
 				fmt.Println("==> Send err Common:", commonErr.Error())
 			} else {
@@ -58,7 +62,7 @@ func main() {
 				AddInfo:           "addInfo",                          // 告警辅助信息
 				LocationInfo:      "locationInfo",                     // 告警定位信息
 			}
-			errs := oam.AlarmPush(&alarm)
+			errs := o.Push.Alarm(&alarm)
 			if errs != nil {
 				fmt.Println("==> Send err Alarm:", errs.Error())
 			} else {
@@ -74,7 +78,7 @@ func main() {
 				Result: oam.UENB_RESULT_AUTH_SUCCESS, // 结果值
 				Type:   oam.UENB_TYPE_AUTH,           // 终端接入基站类型
 			}
-			errs = oam.UENBPush(&uenb)
+			errs = o.Push.UENB(&uenb)
 			if errs != nil {
 				fmt.Println("==> Send err UENBTime:", errs.Error())
 			} else {
@@ -90,7 +94,7 @@ func main() {
 				Name:       "TestName",             // 基站名称 网元标记
 				Position:   "TestPosition",         // 基站位置 网元标记
 			}
-			errs = oam.NBStatePush(&nbState)
+			errs = o.Push.NBState(&nbState)
 			if errs != nil {
 				fmt.Println("==> Send err NBStateTime:", errs.Error())
 			} else {
@@ -99,90 +103,43 @@ func main() {
 
 			// 发话单
 			cdr := oam.CDR{
-				Data: map[string]any{
-					"seqNumber":    true,
-					"callDuration": t.Second(),
-					"recordType":   "MT",
-					"cause":        200,
-					"releaseTime":  t.UnixMilli(),
-				},
+				IMSI:       "460991100000000",      // IMSI
+				NBId:       fmt.Sprint(t.Second()), // 基站ID
+				CellId:     "1",                    // 小区ID
+				TAC:        "4388",                 // TAC
+				CallTime:   time.Now().UnixMilli(), // 呼叫时间
+				CallLength: 10,                     // 呼叫时长
 			}
-			errs = oam.CDRPush(&cdr)
+			errs = o.Push.CDR(&cdr)
 			if errs != nil {
-				fmt.Println("==> Send err CDR:", errs.Error())
+				fmt.Println("==> Send err CDRTime:", errs.Error())
 			} else {
-				fmt.Println("==> Send ok CDR:", cdr.RecordTime)
+				fmt.Println("==> Send ok CDRTime:", cdr.RecordTime)
 			}
 
-			// 发指标
-			oam.KPIKeyInc("Test.A.01")
-			oam.KPIKeyInc("Test.A.02")
-			oam.KPIKeySet("Test.A.03", float64(t.Second()))
+			// 发KPI
+			o.Push.KPIKeyInc("test_inc")
+			o.Push.KPIKeySet("test_set", 100.1)
+			errs = o.Push.KPI()
+			if errs != nil {
+				fmt.Println("==> Send err KPI:", errs.Error())
+			} else {
+				fmt.Println("==> Send ok KPI")
+			}
 
-			// 刷新授权
-			oam.LicenseRefresh(oam.License{
-				NeType:     "NE",
-				Version:    "1.0",
-				SerialNum:  "1234567890",
-				ExpiryDate: "2025-12-31",
-				NbNumber:   t.Second(),
-				UeNumber:   t.Second(),
-			})
-
-			// 重置定时器，按指定周期执行
 			timer.Reset(duration)
 		}
 	}()
 
-	// OMC 信息设置
-	oam.OMCInfoSet(oam.OMC{
-		Url:     "http://192.168.5.58:29565",
-		NeUID:   "12345678",
-		CoreUID: "87654321",
-	})
-	// 上传文件配置
-	oam.ConfigUpload(oam.Upload{
-		FileDir:   "/usr/local/etc/oam/upload",
-		FileSize:  10,
-		Whitelist: []string{".txt", ".pdf", ".docx"},
+	o.SetupRoute(func(r gin.IRouter) {
+		common.SetupRoute(r)
+		state.SetupRoute(r)
+		push.SetupRouteAlarm(r)
+		push.SetupRouteCDR(r)
 	})
 
-	o.RouteAdd(func(r gin.IRouter) {
-		// 网管接收端收通用
-		oam.CommonReceiveRoute(r, func(common oam.Common) error {
-			fmt.Println("<== Receive Common", common)
-			return nil
-		})
-		// 网管接收端收告警
-		oam.AlarmReceiveRoute(r, func(alarm oam.Alarm) error {
-			fmt.Println("<== Receive Alarm", alarm)
-			return nil
-		})
-		// 网管接收端收终端接入基站
-		oam.UENBReceiveRoute(r, func(uenb oam.UENB) error {
-			fmt.Println("<== Receive UENB", uenb)
-			return nil
-		})
-		// 网管接收端收基站状态
-		oam.NBStateReceiveRoute(r, func(nbState oam.NBState) error {
-			fmt.Println("<== Receive NBState", nbState)
-			return nil
-		})
-		// 网管接收端收话单
-		oam.CDRReceiveRoute(r, func(cdr oam.CDR) error {
-			fmt.Println("<== Receive CDR", cdr)
-			return nil
-		})
-		// 指标发送测试
-		oam.KPITimerStart(10 * time.Second)
-		// 网管接收端收KPI
-		oam.KPIReceiveRoute(r, func(kpi oam.KPI) error {
-			fmt.Println("<== Receive KPI", kpi)
-			return nil
-		})
-	})
-
+	// 运行 SDK 逻辑
 	if err := o.Run(); err != nil {
-		fmt.Printf("oam run fail: %s\n", err.Error())
+		fmt.Printf("OAM SDK run error: %v\n", err)
 	}
 }

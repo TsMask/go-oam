@@ -13,16 +13,18 @@ import (
 	"github.com/tsmask/go-oam/modules/tool/service"
 )
 
-// 实例化控制层 PingController 结构体
-var NewPing = &PingController{
-	pingService: service.NewPing,
+// NewPingController 实例化控制层 PingController 结构体
+func NewPingController() *PingController {
+	return &PingController{
+		srv: service.NewPingService(),
+	}
 }
 
 // ping ICMP网络探测工具 https://github.com/prometheus-community/pro-bing
 //
 // PATH /tool/ping
 type PingController struct {
-	pingService *service.Ping // ping ICMP网络探测工具
+	srv *service.Ping // ping ICMP网络探测工具
 }
 
 // ping 基本信息运行
@@ -38,7 +40,7 @@ type PingController struct {
 //	@Summary		Ping for Basic Information Running
 //	@Description	Ping for Basic Information Running
 //	@Router			/tool/ping [post]
-func (s PingController) Statistics(c *gin.Context) {
+func (s *PingController) Statistics(c *gin.Context) {
 	var body model.Ping
 	if err := c.ShouldBindBodyWithJSON(&body); err != nil {
 		errMsgs := fmt.Sprintf("bind err: %s", resp.FormatBindError(err))
@@ -46,7 +48,7 @@ func (s PingController) Statistics(c *gin.Context) {
 		return
 	}
 
-	info, err := s.pingService.Statistics(body)
+	info, err := s.srv.Statistics(body)
 	if err != nil {
 		c.JSON(200, resp.ErrMsg(err.Error()))
 		return
@@ -59,15 +61,10 @@ func (s PingController) Statistics(c *gin.Context) {
 // GET /v
 //
 //	@Tags			tool/ping
-//	@Accept			json
-//	@Produce		json
-//	@Success		200		{object}	object	"Response Results"
-//	@Security		TokenAuth
 //	@Summary		Ping for version information on the network element side
-//	@Description	Ping for version information on the network element side
 //	@Router			/tool/ping/v [get]
-func (s PingController) Version(c *gin.Context) {
-	output, err := s.pingService.Version()
+func (s *PingController) Version(c *gin.Context) {
+	output, err := s.srv.Version()
 	if err != nil {
 		c.JSON(200, resp.ErrMsg(err.Error()))
 		return
@@ -80,22 +77,12 @@ func (s PingController) Version(c *gin.Context) {
 // GET /run
 //
 //	@Tags			tool/ping
-//	@Accept			json
-//	@Produce		json
-//	@Param			bindUid			query		string	true	"绑定唯一标识"						default(001)
-//	@Param			cols			query		number	false	"Terminal line characters"	default(120)
-//	@Param			rows			query		number	false	"Terminal display lines"	default(40)
-//	@Param			access_token	query		string	true	"Authorization"
-//	@Success		200				{object}	object	"Response Results"
-//	@Security		TokenAuth
 //	@Summary		(ws://) Ping for UNIX runs on the network element side
-//	@Description	(ws://) Ping for UNIX runs on the network element side
 //	@Router			/tool/ping/run [get]
-func (s PingController) Run(c *gin.Context) {
+func (s *PingController) Run(c *gin.Context) {
 	var query struct {
-		BindUID string `form:"bindUid"  binding:"required"` // 绑定唯一标识
-		Cols    int    `form:"cols"`                        // 终端单行字符数
-		Rows    int    `form:"rows"`                        // 终端显示行数
+		Cols int `form:"cols"` // 终端单行字符数
+		Rows int `form:"rows"` // 终端显示行数
 	}
 	if err := c.ShouldBindQuery(&query); err != nil {
 		errMsgs := fmt.Sprintf("bind err: %s", resp.FormatBindError(err))
@@ -126,7 +113,7 @@ func (s PingController) Run(c *gin.Context) {
 	defer wsConn.Close()
 	wsConn.SetAnyConn(clientSession)
 	go wsConn.WriteListen(nil)
-	go wsConn.ReadListen(nil, s.pingService.Session)
+	go wsConn.ReadListen(nil, s.srv.Session)
 
 	// 等待1秒，排空首次消息
 	time.Sleep(1 * time.Second)

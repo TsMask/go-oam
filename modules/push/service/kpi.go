@@ -18,25 +18,34 @@ const KPI_PUSH_URI = "/push/kpi/receive"
 // float64互转uint64 精度控制，支持3位小数精度
 const precisionMultiplier = 1000
 
-var (
-	kpiHistorys           []model.KPI  // KPI历史记录
-	kpiHistorysMux        sync.RWMutex // 保护kpiHistorys的并发访问
-	kpiHistorysMaxSize    = 4096       // 最大历史记录数量
-	kpiHistorysMaxSizeMux sync.RWMutex // 保护修改数量的并发访问
-)
-
 // KPI 指标服务
 type KPI struct {
-	NeUid          string             // 网元唯一标识
-	Granularity    time.Duration      // 指标缓存时间粒度
-	data           sync.Map           // 存储string -> *atomic.Uint64
-	clearMutex     sync.Mutex         // 保护清空操作
-	kpiTimerCancel context.CancelFunc // KPI 定时发送取消函数
+	NeUid                 string             // 网元唯一标识
+	Granularity           time.Duration      // 指标缓存时间粒度
+	data                  sync.Map           // 存储string -> *atomic.Uint64
+	clearMutex            sync.Mutex         // 保护清空操作
+	kpiTimerCancel        context.CancelFunc // KPI 定时发送取消函数
+	kpiHistorys           []model.KPI        // KPI历史记录
+	kpiHistorysMux        sync.RWMutex       // 保护kpiHistorys的并发访问
+	kpiHistorysMaxSize    int                // 最大历史记录数量
+	kpiHistorysMaxSizeMux sync.RWMutex       // 保护修改数量的并发访问
+}
 
+// NewKPI 创建KPI服务
+func NewKPI(neUid string, granularity time.Duration) *KPI {
+	return &KPI{
+		NeUid:              neUid,
+		Granularity:        granularity,
+		kpiHistorys:        []model.KPI{},
+		kpiHistorysMaxSize: 4096,
+	}
 }
 
 // KPITimerStart KPI定时发送
 func (s *KPI) KPITimerStart(url string) {
+	if s == nil {
+		return
+	}
 	// 先关闭当前定时器
 	s.KPITimerStop()
 
@@ -56,7 +65,7 @@ func (s *KPI) KPITimerStart(url string) {
 				dataMap := s.safeGetAllData()
 				if len(dataMap) != 0 {
 					granularity := int64(s.Granularity.Seconds())
-					err := KPISend(url, s.NeUid, granularity, dataMap)
+					err := s.Send(url, s.NeUid, granularity, dataMap)
 					if err != nil {
 						log.Printf("[OAM] kpi timer send failed NeUid: %s, Granularity: %ds\n%s\n", s.NeUid, granularity, err.Error())
 						fail++
@@ -81,6 +90,9 @@ func (s *KPI) KPITimerStart(url string) {
 
 // KPITimerStop 停止KPI定时发送
 func (s *KPI) KPITimerStop() {
+	if s == nil {
+		return
+	}
 	if s.kpiTimerCancel != nil {
 		s.kpiTimerCancel()
 		s.kpiTimerCancel = nil
@@ -198,18 +210,21 @@ func (s *KPI) safeClearData() {
 	})
 }
 
-// KPIHistoryList 线程安全地获取历史列表
+// HistoryList 线程安全地获取历史列表
 // n 为返回的最大记录数，n<0返回空列表 n=0返回所有记录
-func KPIHistoryList(n int) []model.KPI {
-	kpiHistorysMux.RLock()
-	defer kpiHistorysMux.RUnlock()
+func (s *KPI) HistoryList(n int) []model.KPI {
+	if s == nil {
+		return []model.KPI{}
+	}
+	s.kpiHistorysMux.RLock()
+	defer s.kpiHistorysMux.RUnlock()
 
 	if n < 0 {
 		return []model.KPI{}
 	}
 
 	// 计算要返回的记录数量
-	historyLen := len(kpiHistorys)
+	historyLen := len(s.kpiHistorys)
 	startIndex := 0
 
 	// 仅当 n > 0 并且历史记录数大于 n 时才截取
@@ -219,54 +234,74 @@ func KPIHistoryList(n int) []model.KPI {
 
 	// 只复制需要的部分
 	result := make([]model.KPI, historyLen-startIndex)
-	copy(result, kpiHistorys[startIndex:])
+	copy(result, s.kpiHistorys[startIndex:])
 	return result
 }
 
-// KPIHistorySetSize 安全地修改最大历史记录数量
+// HistorySetSize 安全地修改最大历史记录数量
 // 如果新的最大数量小于当前记录数，会自动清理旧记录
-func KPIHistorySetSize(newSize int) {
-	if newSize <= 0 {
+func (s *KPI) HistorySetSize(newSize int) {
+	if s == nil || newSize <= 0 {
 		return // 无效的大小，不做任何修改
 	}
 
 	// 先更新最大记录数
-	kpiHistorysMaxSizeMux.Lock()
-	oldSize := kpiHistorysMaxSize
-	kpiHistorysMaxSize = newSize
-	kpiHistorysMaxSizeMux.Unlock()
+	s.kpiHistorysMaxSizeMux.Lock()
+	oldSize := s.kpiHistorysMaxSize
+	s.kpiHistorysMaxSize = newSize
+	s.kpiHistorysMaxSizeMux.Unlock()
 
 	// 如果新的最大数量小于旧的最大数量，可能需要清理历史记录
 	if newSize < oldSize {
-		kpiHistorysMux.Lock()
-		defer kpiHistorysMux.Unlock()
+		s.kpiHistorysMux.Lock()
+		defer s.kpiHistorysMux.Unlock()
 		// 如果历史记录数超过最大允许数量，只保留最新的记录
-		if len(kpiHistorys) > kpiHistorysMaxSize {
-			kpiHistorys = kpiHistorys[len(kpiHistorys)-kpiHistorysMaxSize:]
+		if len(s.kpiHistorys) > s.kpiHistorysMaxSize {
+			s.kpiHistorys = s.kpiHistorys[len(s.kpiHistorys)-s.kpiHistorysMaxSize:]
 		}
 	}
 }
 
 // safeAppendHistory 线程安全地添加历史记录
-func safeAppendHistory(kpi model.KPI) {
-	kpiHistorysMux.Lock()
-	defer kpiHistorysMux.Unlock()
+func (s *KPI) safeAppendHistory(kpi model.KPI) {
+	if s == nil {
+		return
+	}
+	s.kpiHistorysMux.Lock()
+	defer s.kpiHistorysMux.Unlock()
 
 	// 获取最大历史记录数
-	kpiHistorysMaxSizeMux.RLock()
-	maxSize := kpiHistorysMaxSize
-	kpiHistorysMaxSizeMux.RUnlock()
+	s.kpiHistorysMaxSizeMux.RLock()
+	maxSize := s.kpiHistorysMaxSize
+	s.kpiHistorysMaxSizeMux.RUnlock()
 
-	if len(kpiHistorys) >= maxSize {
+	if len(s.kpiHistorys) >= maxSize {
 		// 如果超过，删除最旧的记录（索引为0的记录）
-		kpiHistorys = kpiHistorys[1:]
+		s.kpiHistorys = s.kpiHistorys[1:]
 	}
 
-	kpiHistorys = append(kpiHistorys, kpi)
+	s.kpiHistorys = append(s.kpiHistorys, kpi)
 }
 
-// KPISend 发送KPI
-func KPISend(url, neUid string, granularity int64, dataMap map[string]float64) error {
+// PushURL 推送KPI到指定URL
+func (s *KPI) PushURL(url string) error {
+	if s == nil {
+		return nil
+	}
+	dataMap := s.safeGetAllData()
+	if len(dataMap) == 0 {
+		return nil
+	}
+	granularity := int64(s.Granularity.Seconds())
+	err := s.Send(url, s.NeUid, granularity, dataMap)
+	if err == nil {
+		s.safeClearData()
+	}
+	return err
+}
+
+// Send 发送KPI
+func (s *KPI) Send(url, neUid string, granularity int64, dataMap map[string]float64) error {
 	k := model.KPI{
 		Data:        dataMap,
 		Granularity: granularity,
@@ -274,7 +309,7 @@ func KPISend(url, neUid string, granularity int64, dataMap map[string]float64) e
 		NeUid:       neUid,
 	}
 
-	safeAppendHistory(k)
+	s.safeAppendHistory(k)
 
 	// 发送推送请求
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

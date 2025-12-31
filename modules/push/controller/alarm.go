@@ -12,29 +12,28 @@ import (
 	"github.com/tsmask/go-oam/modules/push/service"
 )
 
-// 实例化控制层 AlarmController 结构体
-var NewAlarm = &AlarmController{}
+// NewAlarmController 创建告警控制器
+func NewAlarmController() *AlarmController {
+	return &AlarmController{srv: service.NewAlarm()}
+}
 
 // 告警
 //
 // PATH /alarm
-type AlarmController struct{}
+type AlarmController struct {
+	srv *service.Alarm
+}
 
 // 告警历史记录
 //
 // GET /history
 //
 //	@Tags			Alarm
-//	@Accept			json
-//	@Produce		json
-//	@Success		200	{object}	object	"Response Results"
-//	@Security		TokenAuth
-//	@Summary		Alarm Server Information
-//	@Description	Alarm Server Information
+//	@Summary		Alarm History List
 //	@Router			/alarm/history [get]
 func (s AlarmController) History(c *gin.Context) {
 	n := parse.Number(c.Query("n"))
-	data := service.AlarmHistoryList(int(n))
+	data := s.srv.HistoryList(int(n))
 	c.JSON(200, resp.OkData(data))
 }
 
@@ -43,12 +42,7 @@ func (s AlarmController) History(c *gin.Context) {
 // GET /test
 //
 //	@Tags			Alarm
-//	@Accept			json
-//	@Produce		json
-//	@Success		200	{object}	object	"Response Results"
-//	@Security		TokenAuth
-//	@Summary		Alarm Server Information
-//	@Description	Alarm Server Information
+//	@Summary		Alarm Push Test
 //	@Router			/alarm/test [get]
 func (s AlarmController) Test(c *gin.Context) {
 	var query struct {
@@ -77,7 +71,7 @@ func (s AlarmController) Test(c *gin.Context) {
 		AddInfo:           addInfo,                              // 告警辅助信息
 		LocationInfo:      locationInfo,                         // 告警定位信息
 	}
-	err := service.AlarmPushURL(query.Url, &alarm)
+	err := s.srv.PushURL(query.Url, &alarm)
 	if err != nil {
 		c.JSON(200, resp.ErrMsg(err.Error()))
 		return

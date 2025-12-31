@@ -3,18 +3,22 @@ package controller
 import (
 	"github.com/gin-gonic/gin"
 
+	"github.com/tsmask/go-oam/framework/route/reqctx"
 	"github.com/tsmask/go-oam/framework/route/resp"
-	"github.com/tsmask/go-oam/modules/callback"
 	"github.com/tsmask/go-oam/modules/state/service"
 )
 
-// 实例化控制层 StateController 结构体
-var NewState = &StateController{}
+// NewStateController 实例化控制层 StateController 结构体
+func NewStateController() *StateController {
+	return &StateController{srv: service.NewStateService()}
+}
 
 // 网元状态
 //
 // PATH /state
-type StateController struct{}
+type StateController struct {
+	srv *service.State
+}
 
 // 网元状态信息
 //
@@ -28,8 +32,10 @@ type StateController struct{}
 //	@Summary		State Server Information
 //	@Description	State Server Information
 //	@Router			/state/ne [get]
-func (s StateController) NE(c *gin.Context) {
-	data := service.NewState.Info()
+func (s *StateController) NE(c *gin.Context) {
+	oamCfg := reqctx.OAMConfig(c)
+	oamCallback := reqctx.OAMCallback(c)
+	data := s.srv.Info(oamCfg, oamCallback)
 	c.JSON(200, resp.OkData(data))
 }
 
@@ -45,6 +51,8 @@ func (s StateController) NE(c *gin.Context) {
 //	@Summary		State Server Information
 //	@Description	State Server Information
 //	@Router			/state/standby [get]
-func (s StateController) Standby(c *gin.Context) {
-	c.JSON(200, resp.OkData(callback.Standby()))
+func (s *StateController) Standby(c *gin.Context) {
+	oamCallback := reqctx.OAMCallback(c)
+	data := s.srv.Standby(oamCallback)
+	c.JSON(200, resp.OkData(data))
 }

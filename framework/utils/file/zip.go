@@ -18,7 +18,7 @@ func UnZip(zipFilePath, dirPath string) error {
 	defer r.Close()
 
 	// 创建本地输出目录
-	if err := os.MkdirAll(dirPath, 0775); err != nil {
+	if err = os.MkdirAll(dirPath, 0775); err != nil {
 		return err
 	}
 
@@ -35,7 +35,7 @@ func UnZip(zipFilePath, dirPath string) error {
 		path := filepath.ToSlash(filepath.Join(dirPath, f.Name))
 		if f.FileInfo().IsDir() {
 			// 如果是目录，创建目录
-			if err := os.MkdirAll(path, 0775); err != nil {
+			if err = os.MkdirAll(path, 0775); err != nil {
 				return err
 			}
 		} else {

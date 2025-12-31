@@ -6,13 +6,13 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// 模块路由注册
+// SetupRoute 模块路由注册
 func SetupRoute(router gin.IRouter) {
-	// WebSocket 协议
-	ws := controller.NewWSController
+	ws := controller.NewWSController()
+	// ws 路由
 	wsGroup := router.Group("/ws")
 	{
-		wsGroup.GET("", ws.WS) // ws
+		wsGroup.GET("", ws.WS)
 		wsGroup.GET("/test", ws.Test)
 	}
 }

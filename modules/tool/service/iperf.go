@@ -11,8 +11,9 @@ import (
 	"github.com/tsmask/go-oam/framework/ws/protocol"
 )
 
-// 实例化服务层 IPerf 结构体
-var NewIPerf = &IPerf{}
+func NewIPerfService() *IPerf {
+	return &IPerf{}
+}
 
 // IPerf 网络性能测试工具 服务层处理
 type IPerf struct{}

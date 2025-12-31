@@ -12,22 +12,33 @@ import (
 // COMMON_PUSH_URI 通用推送URI地址 POST
 const COMMON_PUSH_URI = "/push/common/receive"
 
-var (
+// Common 通用服务
+type Common struct {
 	commonHistorys           sync.Map     // commonHistorys 通用历史记录
 	commonHistorysMaxSizeMux sync.RWMutex // 保护最大历史记录数的锁
-	commonHistorysMaxSize    = 4096       // 最大历史记录数
-)
+	commonHistorysMaxSize    int          // 最大历史记录数
+}
 
-// CommonHistoryList 线程安全地获取历史列表
+// NewCommon 创建通用服务
+func NewCommon() *Common {
+	return &Common{
+		commonHistorysMaxSize: 4096,
+	}
+}
+
+// HistoryList 线程安全地获取历史列表
 // n 为返回的最大记录数，n<0返回空列表 n=0返回所有记录
-func CommonHistoryList(typeStr string, n int) []model.Common {
+func (s *Common) HistoryList(typeStr string, n int) []model.Common {
+	if s == nil {
+		return []model.Common{}
+	}
 	// 检查n是否小于0，如果是则返回空列表
 	if n < 0 {
 		return []model.Common{}
 	}
 
 	// 获取历史记录
-	history, ok := commonHistorys.Load(typeStr)
+	history, ok := s.commonHistorys.Load(typeStr)
 	if !ok {
 		return []model.Common{}
 	}
@@ -53,15 +64,18 @@ func CommonHistoryList(typeStr string, n int) []model.Common {
 }
 
 // safeAppendCommonHistory 线程安全地添加历史记录
-func safeAppendCommonHistory(typeStr string, common *model.Common) {
+func (s *Common) safeAppendCommonHistory(typeStr string, common *model.Common) {
+	if s == nil {
+		return
+	}
 	// 获取当前历史记录，如果不存在则创建空切片
-	history, _ := commonHistorys.LoadOrStore(typeStr, []model.Common{})
+	history, _ := s.commonHistorys.LoadOrStore(typeStr, []model.Common{})
 	commonHistorysList := history.([]model.Common)
 
 	// 获取最大历史记录数
-	commonHistorysMaxSizeMux.RLock()
-	maxSize := commonHistorysMaxSize
-	commonHistorysMaxSizeMux.RUnlock()
+	s.commonHistorysMaxSizeMux.RLock()
+	maxSize := s.commonHistorysMaxSize
+	s.commonHistorysMaxSizeMux.RUnlock()
 
 	// 创建新的切片，避免直接修改原切片
 	newHistorys := make([]model.Common, len(commonHistorysList)+1)
@@ -74,24 +88,27 @@ func safeAppendCommonHistory(typeStr string, common *model.Common) {
 	}
 
 	// 存储更新后的历史记录
-	commonHistorys.Store(typeStr, newHistorys)
+	s.commonHistorys.Store(typeStr, newHistorys)
 }
 
-// CommonHistorySetSize 安全地修改最大历史记录数量
+// HistorySetSize 安全地修改最大历史记录数量
 // 如果新的最大数量小于当前记录数，会自动清理旧记录
-func CommonHistorySetSize(newSize int) {
-	commonHistorysMaxSizeMux.Lock()
-	oldSize := commonHistorysMaxSize
-	commonHistorysMaxSize = newSize
-	commonHistorysMaxSizeMux.Unlock()
+func (s *Common) HistorySetSize(newSize int) {
+	if s == nil {
+		return
+	}
+	s.commonHistorysMaxSizeMux.Lock()
+	oldSize := s.commonHistorysMaxSize
+	s.commonHistorysMaxSize = newSize
+	s.commonHistorysMaxSizeMux.Unlock()
 
 	// 如果新的最大数量小于旧的最大数量，需要清理历史记录
 	if newSize < oldSize {
-		commonHistorys.Range(func(key, value interface{}) bool {
+		s.commonHistorys.Range(func(key, value interface{}) bool {
 			if history, ok := value.([]model.Common); ok {
 				if len(history) > newSize {
 					// 只保留最新的记录
-					commonHistorys.Store(key, history[len(history)-newSize:])
+					s.commonHistorys.Store(key, history[len(history)-newSize:])
 				}
 			}
 			return true
@@ -99,14 +116,17 @@ func CommonHistorySetSize(newSize int) {
 	}
 }
 
-// CommonPushURL 通用推送 自定义URL地址接收
-func CommonPushURL(url string, common *model.Common) error {
+// PushURL 通用推送 自定义URL地址接收
+func (s *Common) PushURL(url string, common *model.Common) error {
+	if s == nil {
+		return nil
+	}
 	common.RecordTime = time.Now().UnixMilli()
 
-	// 线程安全地记录历史
-	safeAppendCommonHistory(common.Type, common)
+	// 记录历史
+	s.safeAppendCommonHistory(common.Type, common)
 
-	// 发送推送请求
+	// 发送
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	return fetch.Push(ctx, url, common)

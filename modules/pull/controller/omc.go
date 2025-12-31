@@ -5,13 +5,15 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/tsmask/go-oam/framework/config"
+	"github.com/tsmask/go-oam/framework/route/reqctx"
 	"github.com/tsmask/go-oam/framework/route/resp"
-	"github.com/tsmask/go-oam/modules/pull/model"
-	"github.com/tsmask/go-oam/modules/pull/service"
 )
 
-// 实例化控制层 OMCController 结构体
-var NewOMC = &OMCController{}
+// NewOMCController 实例化控制层 OMCController 结构体
+func NewOMCController() *OMCController {
+	return &OMCController{}
+}
 
 // 网管
 //
@@ -30,8 +32,12 @@ type OMCController struct{}
 //	@Summary		OMC Server Information
 //	@Description	OMC Server Information
 //	@Router			/omc/link [get]
-func (s OMCController) LinkGet(c *gin.Context) {
-	data := service.OMCInfoGet()
+func (s *OMCController) LinkGet(c *gin.Context) {
+	oamCfg := reqctx.OAMConfig(c)
+	var data config.OMCConfig
+	oamCfg.View(func(c *config.Config) {
+		data = c.OMC
+	})
 	c.JSON(200, resp.OkData(data))
 }
 
@@ -48,16 +54,16 @@ func (s OMCController) LinkGet(c *gin.Context) {
 //	@Summary		OMC Server Link
 //	@Description	OMC Server Link
 //	@Router			/omc/link [put]
-func (s OMCController) LinkSet(c *gin.Context) {
-	var body model.OMC
+func (s *OMCController) LinkSet(c *gin.Context) {
+	var body config.OMCConfig
 	if err := c.ShouldBindBodyWithJSON(&body); err != nil {
 		errMsgs := fmt.Sprintf("bind err: %s", resp.FormatBindError(err))
 		c.JSON(422, resp.CodeMsg(resp.CODE_PARAM_PARSER, errMsgs))
 		return
 	}
-	if err := service.OMCInfoSet(body); err != nil {
-		c.JSON(200, resp.ErrMsg(err.Error()))
-		return
-	}
+	oamCfg := reqctx.OAMConfig(c)
+	oamCfg.Update(func(c *config.Config) {
+		c.OMC = body
+	})
 	c.JSON(200, resp.Ok(nil))
 }

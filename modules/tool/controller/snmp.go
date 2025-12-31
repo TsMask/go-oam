@@ -5,21 +5,24 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/tsmask/go-oam/framework/route/reqctx"
 	"github.com/tsmask/go-oam/framework/route/resp"
 	"github.com/tsmask/go-oam/framework/ws"
 	"github.com/tsmask/go-oam/modules/tool/service"
 )
 
-// 实例化控制层 SNMPController 结构体
-var NewSNMP = &SNMPController{
-	snmpService: service.NewSNMP,
+// NewSNMPController 实例化控制层 SNMPController 结构体
+func NewSNMPController() *SNMPController {
+	return &SNMPController{
+		srv: service.NewSNMPService(),
+	}
 }
 
 // SNMP
 //
-// PATH /tool/SNMP
+// PATH /tool/snmp
 type SNMPController struct {
-	snmpService *service.SNMP // SNMP 命令交互工具服务
+	srv *service.SNMP // SNMP 命令交互工具服务
 }
 
 // SNMP 命令执行
@@ -27,15 +30,9 @@ type SNMPController struct {
 // POST /command
 //
 //	@Tags			tool/snmp
-//	@Accept			json
-//	@Produce		json
-//	@Param			command	query		string	true	"Command"
-//	@Success		200		{object}	object	"Response Results"
-//	@Security		TokenAuth
 //	@Summary		SNMP run
-//	@Description	SNMP run
 //	@Router			/tool/snmp/command [post]
-func (s SNMPController) Command(c *gin.Context) {
+func (s *SNMPController) Command(c *gin.Context) {
 	var body struct {
 		Oid      string `json:"oid" binding:"required"`                            // OID
 		OperType string `json:"operType" binding:"required,oneof=GET GETNEXT SET"` // 操作类型
@@ -47,7 +44,8 @@ func (s SNMPController) Command(c *gin.Context) {
 		return
 	}
 
-	output := s.snmpService.Command(body.Oid, body.OperType, body.Value)
+	oamCallback := reqctx.OAMCallback(c)
+	output := s.srv.Command(oamCallback, body.Oid, body.OperType, body.Value)
 	c.JSON(200, resp.OkData(output))
 }
 
@@ -56,22 +54,23 @@ func (s SNMPController) Command(c *gin.Context) {
 // GET /session
 //
 //	@Tags			tool/snmp
-//	@Accept			json
-//	@Produce		json
-//	@Param			bindUid			query		string	true	"绑定唯一标识"						default(001)
-//	@Success		200				{object}	object	"Response Results"
-//	@Security		TokenAuth
 //	@Summary		(ws://) SNMP endpoint session
-//	@Description	(ws://) SNMP endpoint session
 //	@Router			/tool/snmp/session [get]
-func (s SNMPController) Session(c *gin.Context) {
+func (s *SNMPController) Session(c *gin.Context) {
 	var query struct {
-		BindUID string `form:"bindUid"  binding:"required"` // 绑定唯一标识
+		Cols int `form:"cols"` // 终端单行字符数
+		Rows int `form:"rows"` // 终端显示行数
 	}
 	if err := c.ShouldBindQuery(&query); err != nil {
 		errMsgs := fmt.Sprintf("bind err: %s", resp.FormatBindError(err))
 		c.JSON(422, resp.CodeMsg(resp.CODE_PARAM_PARSER, errMsgs))
 		return
+	}
+	if query.Cols == 0 {
+		query.Cols = 120
+	}
+	if query.Rows == 0 {
+		query.Rows = 40
 	}
 
 	wsConn := ws.ServerConn{}
@@ -81,8 +80,10 @@ func (s SNMPController) Session(c *gin.Context) {
 		return
 	}
 	defer wsConn.Close()
+	oamCallback := reqctx.OAMCallback(c)
+	wsConn.SetAnyConn(oamCallback)
 	go wsConn.WriteListen(nil)
-	go wsConn.ReadListen(nil, s.snmpService.Session)
+	go wsConn.ReadListen(nil, s.srv.Session)
 
 	// 等待停止信号
 	for range wsConn.CloseSignal() {

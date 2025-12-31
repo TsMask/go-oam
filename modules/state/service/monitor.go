@@ -12,8 +12,9 @@ import (
 	"github.com/shirou/gopsutil/v4/net"
 )
 
-// 实例化服务层 Monitor 结构体
-var NewMonitor = &Monitor{}
+func NewMonitorService() *Monitor {
+	return &Monitor{}
+}
 
 // Monitor 机器资源相关信息 服务层处理
 type Monitor struct{}

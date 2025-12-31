@@ -3,6 +3,7 @@ package service
 import (
 	"fmt"
 
+	"github.com/tsmask/go-oam/framework/config"
 	"github.com/tsmask/go-oam/framework/route/resp"
 	"github.com/tsmask/go-oam/framework/ws"
 	"github.com/tsmask/go-oam/framework/ws/protocol"
@@ -24,11 +25,14 @@ func ReceiveCommon(conn *ws.ServerConn, messageType int, req *protocol.Request) 
 	case "net":
 		respData, err = processor.GetNetConnections(req.Data)
 	case "file:upload":
-		respData, err = processor.FileUpload(messageType, req.Data)
+		cfg := conn.GetAnyConn().(*config.Config)
+		respData, err = processor.FileUpload(cfg, messageType, req.Data)
 	case "file:chunk:upload":
-		respData, err = processor.FileChunkUpload(messageType, req.Data)
+		cfg := conn.GetAnyConn().(*config.Config)
+		respData, err = processor.FileChunkUpload(cfg, messageType, req.Data)
 	case "file:download":
-		respData, err = processor.FileDownload(messageType, req.Data)
+		cfg := conn.GetAnyConn().(*config.Config)
+		respData, err = processor.FileDownload(cfg, messageType, req.Data)
 	}
 
 	if err != nil {

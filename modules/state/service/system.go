@@ -18,14 +18,15 @@ import (
 	"github.com/shirou/gopsutil/v4/net"
 )
 
-// 实例化服务层 System 结构体
-var NewSystem = &System{}
+func NewSystemService() *System {
+	return &System{}
+}
 
 // System 服务器系统相关信息 服务层处理
 type System struct{}
 
 // Info 系统信息
-func (s *System) Info() map[string]any {
+func (s *System) Info(cfg *config.Config) map[string]any {
 	info, err := host.Info()
 	if err != nil {
 		info.Platform = err.Error()
@@ -33,7 +34,7 @@ func (s *System) Info() map[string]any {
 	// 获取主机运行时间
 	bootTime := time.Since(time.Unix(int64(info.BootTime), 0)).Seconds()
 	// 获取程序运行时间
-	runTime := time.Since(config.RunTime()).Abs().Seconds()
+	runTime := time.Since(cfg.RunTime()).Abs().Seconds()
 	return map[string]any{
 		"platform":        info.Platform,
 		"platformVersion": info.PlatformVersion,

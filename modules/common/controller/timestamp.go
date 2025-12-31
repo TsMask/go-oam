@@ -3,14 +3,16 @@ package controller
 import (
 	"time"
 
-	"github.com/tsmask/go-oam/framework/config"
+	"github.com/tsmask/go-oam/framework/route/reqctx"
 	"github.com/tsmask/go-oam/framework/route/resp"
 
 	"github.com/gin-gonic/gin"
 )
 
-// 实例化控制层 TimestampController 结构体
-var NewTimestamp = &TimestampController{}
+// NewTimestampController 实例化控制层 TimestampController 结构体
+func NewTimestampController() *TimestampController {
+	return &TimestampController{}
+}
 
 // 服务器时间
 //
@@ -28,7 +30,8 @@ type TimestampController struct{}
 //	@Summary		Server Time
 //	@Description	Server Time
 //	@Router			/ [get]
-func (s TimestampController) Handler(c *gin.Context) {
+func (s *TimestampController) Handler(c *gin.Context) {
+	oamCfg := reqctx.OAMConfig(c)
 	now := time.Now()
 	// 获取当前时间戳
 	timestamp := now.UnixMilli()
@@ -39,7 +42,7 @@ func (s TimestampController) Handler(c *gin.Context) {
 	// 获取 RFC3339 格式的时间
 	rfc3339 := now.Format(time.RFC3339)
 	// 获取程序运行时间
-	runTime := time.Since(config.RunTime()).Abs().Seconds()
+	runTime := time.Since(oamCfg.RunTime()).Abs().Seconds()
 	c.JSON(200, resp.OkData(map[string]any{
 		"timestamp":    timestamp,
 		"timezone":     timezone,

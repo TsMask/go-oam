@@ -59,9 +59,9 @@ func WriterFileJSONLine(data []any, filePath string) error {
 	// 创建一个 Writer 对象，用于将数据写入文件
 	writer := bufio.NewWriter(file)
 	for _, row := range data {
-		jsonData, err := json.Marshal(row)
-		if err != nil {
-			return err
+		jsonData, errMarshal := json.Marshal(row)
+		if errMarshal != nil {
+			return errMarshal
 		}
 
 		// 写入 JSON 字符串到文件，并换行

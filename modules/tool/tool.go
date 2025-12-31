@@ -6,54 +6,63 @@ import (
 	"github.com/tsmask/go-oam/modules/tool/controller"
 )
 
-// 模块路由注册
-func SetupRoute(router gin.IRouter) {
-	// iperf 网络性能测试工具
-	toolIperf := controller.NewIPerf
+// SetupRouteIPerf iperf交互路由注册
+func SetupRouteIPerf(router gin.IRouter) {
+	iperf := controller.NewIPerfController()
 	iperfGroup := router.Group("/tool/iperf")
 	{
-		iperfGroup.GET("/v", toolIperf.Version)
-		iperfGroup.GET("/run", toolIperf.Run) // ws
+		iperfGroup.GET("/v", iperf.Version)
+		iperfGroup.GET("/run", iperf.Run) // ws
 	}
+}
 
-	// ping ICMP网络探测工具
-	toolPing := controller.NewPing
+// SetupRoutePing ping交互路由注册
+func SetupRoutePing(router gin.IRouter) {
+	ping := controller.NewPingController()
 	pingGroup := router.Group("/tool/ping")
 	{
-		pingGroup.POST("", toolPing.Statistics)
-		pingGroup.GET("/v", toolPing.Version)
-		pingGroup.GET("/run", toolPing.Run) // ws
+		pingGroup.POST("", ping.Statistics)
+		pingGroup.GET("/v", ping.Version)
+		pingGroup.GET("/run", ping.Run) // ws
 	}
+}
 
-	// ssh 终端命令交互工具
-	toolSSH := controller.NewSSH
+// SetupRouteSSH ssh交互路由注册
+func SetupRouteSSH(router gin.IRouter) {
+	ssh := controller.NewSSHController()
 	sshGroup := router.Group("/tool/ssh")
 	{
-		sshGroup.POST("/command", toolSSH.Command)
-		sshGroup.GET("/session", toolSSH.Session) // ws
+		sshGroup.POST("/command", ssh.Command)
+		sshGroup.GET("/session", ssh.Session) // ws
 	}
+}
 
-	// telnet 命令交互工具
-	toolTelnet := controller.NewTelnet
+// SetupRouteTelnet telnet交互路由注册
+func SetupRouteTelnet(router gin.IRouter) {
+	telnet := controller.NewTelnetController()
 	telnetGroup := router.Group("/tool/telnet")
 	{
-		telnetGroup.POST("/command", toolTelnet.Command)
-		telnetGroup.GET("/session", toolTelnet.Session) // ws
+		telnetGroup.POST("/command", telnet.Command)
+		telnetGroup.GET("/session", telnet.Session) // ws
 	}
+}
 
-	// snmp 命令交互工具
-	toolSnmp := controller.NewSNMP
+// SetupRouteSNMP snmp交互路由注册
+func SetupRouteSNMP(router gin.IRouter) {
+	snmp := controller.NewSNMPController()
 	snmpGroup := router.Group("/tool/snmp")
 	{
-		snmpGroup.POST("/command", toolSnmp.Command)
-		snmpGroup.GET("/session", toolSnmp.Session) // ws
+		snmpGroup.POST("/command", snmp.Command)
+		snmpGroup.GET("/session", snmp.Session) // ws
 	}
+}
 
-	// redis 命令交互工具
-	toolRedis := controller.NewRedis
+// SetupRouteRedis redis交互路由注册
+func SetupRouteRedis(router gin.IRouter) {
+	redis := controller.NewRedisController()
 	redisGroup := router.Group("/tool/redis")
 	{
-		redisGroup.POST("/command", toolRedis.Command)
-		redisGroup.GET("/session", toolRedis.Session) // ws
+		redisGroup.POST("/command", redis.Command)
+		redisGroup.GET("/session", redis.Session) // ws
 	}
 }

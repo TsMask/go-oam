@@ -11,13 +11,17 @@ import (
 	"github.com/tsmask/go-oam/modules/state/service"
 )
 
-// 实例化控制层 MonitorController 结构体
-var NewMonitor = &MonitorController{}
+// NewMonitorController 实例化控制层 MonitorController 结构体
+func NewMonitorController() *MonitorController {
+	return &MonitorController{srv: service.NewMonitorService()}
+}
 
 // 机器资源
 //
 // PATH /monitor
-type MonitorController struct{}
+type MonitorController struct {
+	srv *service.Monitor
+}
 
 // 机器资源信息
 //
@@ -31,7 +35,7 @@ type MonitorController struct{}
 //	@Summary		Monitor Server Information
 //	@Description	Monitor Server Information
 //	@Router			/state/monitor [get]
-func (s MonitorController) Handler(c *gin.Context) {
+func (s *MonitorController) Handler(c *gin.Context) {
 	var query struct {
 		Type     string `form:"type" binding:"required,oneof=all load io network"`  // 数据类型all/load/io/network
 		Duration int    `form:"duration" binding:"required,oneof=5 10 15 20 25 30"` // 采集周期5 10 15 20 25 30
@@ -43,18 +47,17 @@ func (s MonitorController) Handler(c *gin.Context) {
 	}
 
 	duration := time.Duration(query.Duration) * time.Second
-	monitorService := service.NewMonitor
 	switch query.Type {
 	case "load":
-		data := monitorService.LoadCPUMem(duration)
+		data := s.srv.LoadCPUMem(duration)
 		c.JSON(200, resp.OkData(data))
 		return
 	case "io":
-		data := monitorService.LoadDiskIO(duration)
+		data := s.srv.LoadDiskIO(duration)
 		c.JSON(200, resp.OkData(data))
 		return
 	case "network":
-		data := monitorService.LoadNetIO(duration)
+		data := s.srv.LoadNetIO(duration)
 		c.JSON(200, resp.OkData(data))
 		return
 	case "all":
@@ -63,15 +66,15 @@ func (s MonitorController) Handler(c *gin.Context) {
 		wg.Add(3)
 		go func() {
 			defer wg.Done()
-			data["load"] = monitorService.LoadCPUMem(duration)
+			data["load"] = s.srv.LoadCPUMem(duration)
 		}()
 		go func() {
 			defer wg.Done()
-			data["io"] = monitorService.LoadDiskIO(duration)
+			data["io"] = s.srv.LoadDiskIO(duration)
 		}()
 		go func() {
 			defer wg.Done()
-			data["network"] = monitorService.LoadNetIO(duration)
+			data["network"] = s.srv.LoadNetIO(duration)
 		}()
 		wg.Wait()
 		c.JSON(200, resp.OkData(data))

@@ -49,7 +49,7 @@ func CompressTarGZByDir(zipFilePath, dirPath string) error {
 			return err
 		}
 		header.Name = relPath
-		if err := tw.WriteHeader(header); err != nil {
+		if err = tw.WriteHeader(header); err != nil {
 			return err
 		}
 		if !info.Mode().IsRegular() {

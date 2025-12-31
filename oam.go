@@ -4,138 +4,121 @@ import (
 	"fmt"
 
 	"github.com/gin-gonic/gin"
-
 	"github.com/tsmask/go-oam/framework/config"
+	"github.com/tsmask/go-oam/framework/route/reqctx"
 	"github.com/tsmask/go-oam/modules"
 	"github.com/tsmask/go-oam/modules/callback"
 )
 
-// License 网元传入
-type License struct {
-	NeType     string // 网元类型 大写
-	Version    string // 版本号 格式：X.Y.Z
-	SerialNum  string // 序列号 8位字符
-	ExpiryDate string // 有效日期 格式：YYYY-MM-DD
-	NbNumber   int    // 基站限制数量 AMF MME
-	UeNumber   int    // 终端限制数量 UDM
-	Pid        int    // 进程ID 外部运行时需要填，不填默认当前
+// OAM SDK 实例
+type OAM struct {
+	cfg      *config.Config
+	handler  callback.CallbackHandler
+	setupArr []func(gin.IRouter)
 }
 
-// Listen 路由HTTP服务监听配置
-type Listen struct {
-	Addr   string // 监听地址 格式：ip:port
-	Schema string // 监听协议 http/https
-	Cert   string // 证书文件路径，仅https协议需要
-	Key    string // 私钥文件路径，仅https协议需要
-}
+// Option Functional Options 接口
+type Option func(*OAM)
 
-// Upload 文件上传配置
-type Upload struct {
-	FileDir   string   // 文件上传目录路径，默认：/tmp
-	FileSize  int      // 最大上传文件大小，单位MB，默认：1
-	Whitelist []string // 文件扩展名白名单
-}
-
-// Opts SDK参数
-type Opts struct {
-	License   License             // 网元License传入
-	ListenArr []Listen            // 启动的监听地址
-	Upload    Upload              // 文件上传配置
-	setupArr  []func(gin.IRouter) // 外部路由拓展
-}
-
-// New 初始化OAM
-func New(o *Opts) *Opts {
-	// 配置参数
-	config.InitConfig()
-	// 网元License传入
-	if o.License.NeType != "" {
-		LicenseRefresh(o.License)
+// WithNEConfig 设置 NE 配置
+func WithNEConfig(neCfg config.NEConfig) Option {
+	return func(o *OAM) {
+		o.cfg.Update(func(c *config.Config) {
+			c.NE = neCfg
+		})
 	}
-	// 文件上传配置
-	if o.Upload.FileDir != "" {
-		ConfigUpload(o.Upload)
+}
+
+// WithRouteConfig 设置路由配置
+func WithRouteConfig(routes []config.RouteConfig) Option {
+	return func(o *OAM) {
+		if len(routes) > 0 {
+			o.cfg.Update(func(c *config.Config) {
+				c.Route = routes
+			})
+		}
+	}
+}
+
+// WithUploadConfig 设置文件上传配置
+func WithUploadConfig(uploadCfg config.UploadConfig) Option {
+	return func(o *OAM) {
+		o.cfg.Update(func(c *config.Config) {
+			c.Upload = uploadCfg
+		})
+	}
+}
+
+// WithOMCConfig 设置 OMC 配置
+func WithOMCConfig(omcCfg config.OMCConfig) Option {
+	return func(o *OAM) {
+		o.cfg.Update(func(c *config.Config) {
+			c.OMC = omcCfg
+		})
+	}
+}
+
+// WithExternalConfig 从外部文件加载配置
+func WithExternalConfig(configPath string) Option {
+	return func(o *OAM) {
+		extC, err := config.LoadExternalConfig(configPath)
+		if err != nil {
+			fmt.Printf("[OAM] load external config error: %s\n", err.Error())
+			return
+		}
+		o.cfg.Merge(extC)
+	}
+}
+
+// WithCallbackHandler 设置回调处理器
+func WithCallbackHandler(handler callback.CallbackHandler) Option {
+	return func(o *OAM) {
+		o.handler = handler
+	}
+}
+
+// New 创建 OAM 实例
+func New(opts ...Option) *OAM {
+	o := &OAM{
+		cfg:      config.New(),
+		handler:  &callback.CallbackFuncs{},
+		setupArr: make([]func(gin.IRouter), 0),
+	}
+
+	// 应用传入的选项
+	for _, opt := range opts {
+		opt(o)
 	}
 	return o
 }
 
 // SetupCallback 相关回调功能
-// 经过New初始后实现相关回调功能
-func (o *Opts) SetupCallback(handler callback.CallbackHandler) {
-	callback.Handler(handler)
+func (o *OAM) SetupCallback(handler callback.CallbackHandler) {
+	o.handler = handler
 }
 
-// RouteExpose 在已有Gin上使用
-// 经过New初始后暴露路由
-func (o *Opts) RouteExpose(router gin.IRouter) error {
-	if config.RunTime().IsZero() {
-		return fmt.Errorf("config not init")
-	}
-	modules.RouteSetup(router)
-	return nil
-}
-
-// RouteAdd 拓展装载路由
-// 经过New初始后拓展装载路由
-func (o *Opts) RouteAdd(setup func(gin.IRouter)) {
-	if setup == nil {
-		return
-	}
-	if len(o.setupArr) == 0 {
-		o.setupArr = make([]func(gin.IRouter), 0)
-	}
+// SetupRoute 拓展装载路由, 可以装载多次
+func (o *OAM) SetupRoute(setup func(gin.IRouter)) {
 	o.setupArr = append(o.setupArr, setup)
 }
 
-// Run 独立运行OAM
-// 经过New初始后启动OAM服务
-func (o *Opts) Run() error {
-	if config.RunTime().IsZero() {
-		return fmt.Errorf("[OAM] config not init")
+// RouteEngine 路由引擎, 已有Gin进行装载路由
+func (o *OAM) RouteEngine(router *gin.Engine) *gin.Engine {
+	router.Use(reqctx.ConfigInContext(o.cfg), reqctx.CallbackInContext(o.handler))
+	for _, setup := range o.setupArr {
+		setup(router)
 	}
-	// 启动的监听地址
-	if len(o.ListenArr) > 0 {
-		listenArr := make([]any, 0)
-		for _, v := range o.ListenArr {
-			item := map[string]any{
-				"addr":   v.Addr,
-				"schema": v.Schema,
-				"cert":   v.Cert,
-				"key":    v.Key,
-			}
-			listenArr = append(listenArr, item)
-		}
-		config.Set("route", listenArr)
-	}
-	return modules.RouteService(o.setupArr)
+	return router
 }
 
-// LicenseRefresh 刷新网元License信息
-func LicenseRefresh(lic License) {
-	neConf, ok := config.Get("ne").(map[string]any)
-	if !ok {
-		return
-	}
-	neConf["type"] = lic.NeType
-	neConf["version"] = lic.Version
-	neConf["serialnum"] = lic.SerialNum
-	neConf["expirydate"] = lic.ExpiryDate
-	neConf["nbnumber"] = lic.NbNumber
-	neConf["uenumber"] = lic.UeNumber
-	neConf["pid"] = lic.Pid
+// Run 启动 OAM 服务
+func (o *OAM) Run() error {
+	router := modules.NewRouter()
+	o.RouteEngine(router)
+	return modules.RunServer(o.cfg, router)
 }
 
-// ConfigUpload 上传文件配置
-func ConfigUpload(uploadConfig Upload) {
-	upload, ok := config.Get("upload").(map[string]any)
-	if !ok {
-		return
-	}
-	upload["filedir"] = uploadConfig.FileDir
-	upload["filesize"] = uploadConfig.FileSize
-	list := make([]any, 0)
-	for _, v := range uploadConfig.Whitelist {
-		list = append(list, v)
-	}
-	upload["whitelist"] = list
+// GetConfig 获取配置实例
+func (o *OAM) GetConfig() *config.Config {
+	return o.cfg
 }

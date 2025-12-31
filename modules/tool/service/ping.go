@@ -12,8 +12,9 @@ import (
 	"github.com/tsmask/go-oam/modules/tool/model"
 )
 
-// 实例化服务层 Ping 结构体
-var NewPing = &Ping{}
+func NewPingService() *Ping {
+	return &Ping{}
+}
 
 // Ping 网络性能测试工具 服务层处理
 type Ping struct{}

@@ -6,16 +6,19 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// 模块路由注册
+// SetupRoute 模块路由注册
 func SetupRoute(router gin.IRouter) {
+	index := controller.NewIndexController()
+	timestamp := controller.NewTimestampController()
+	file := controller.NewFileController()
+
 	// 路由主页
-	router.GET("/i", controller.NewIndex.Handler)
+	router.GET("/i", index.Handler)
 
 	// 路由服务器时间
-	router.GET("/time", controller.NewTimestamp.Handler)
+	router.GET("/time", timestamp.Handler)
 
 	// 文件操作处理
-	file := controller.NewFile
 	fileGroup := router.Group("/file")
 	{
 		fileGroup.POST("/upload", file.Upload)

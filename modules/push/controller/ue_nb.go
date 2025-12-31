@@ -12,29 +12,28 @@ import (
 	"github.com/tsmask/go-oam/modules/push/service"
 )
 
-// 实例化控制层 UENBController 结构体
-var NewUENB = &UENBController{}
+// NewUENBController 创建 UENB 控制器
+func NewUENBController() *UENBController {
+	return &UENBController{srv: service.NewUENB()}
+}
 
 // 终端接入基站
 //
 // PATH /ue/nb
-type UENBController struct{}
+type UENBController struct {
+	srv *service.UENB
+}
 
 // 终端接入基站历史记录
 //
 // GET /history
 //
 //	@Tags			UENB
-//	@Accept			json
-//	@Produce		json
-//	@Success		200	{object}	object	"Response Results"
-//	@Security		TokenAuth
-//	@Summary		UENB Server Information
-//	@Description	UENB Server Information
+//	@Summary		UENB History List
 //	@Router			/ue/nb/history [get]
 func (s UENBController) History(c *gin.Context) {
 	n := parse.Number(c.Query("n"))
-	data := service.UENBHistoryList(int(n))
+	data := s.srv.HistoryList(int(n))
 	c.JSON(200, resp.OkData(data))
 }
 
@@ -43,12 +42,7 @@ func (s UENBController) History(c *gin.Context) {
 // GET /test
 //
 //	@Tags			UENB
-//	@Accept			json
-//	@Produce		json
-//	@Success		200	{object}	object	"Response Results"
-//	@Security		TokenAuth
-//	@Summary		UENB Server Information
-//	@Description	UENB Server Information
+//	@Summary		UENB Push Test
 //	@Router			/ue/nb/test [get]
 func (s UENBController) Test(c *gin.Context) {
 	var query struct {
@@ -62,15 +56,15 @@ func (s UENBController) Test(c *gin.Context) {
 	}
 
 	uenb := model.UENB{
-		NeUid:  query.NeUID,                                    // 网元唯一标识
-		NBId:   fmt.Sprint(generate.Number(2)),                 // 基站ID
-		CellId: "1",                                            // 小区ID
-		TAC:    "4388",                                         // TAC
-		IMSI:   fmt.Sprintf("460991100%d", generate.Number(6)), // IMSI
-		Result: model.UENB_RESULT_AUTH_SUCCESS,                 // 结果值
-		Type:   model.UENB_TYPE_AUTH,                           // 终端接入基站类型
+		NeUid:  query.NeUID,                            // 网元唯一标识
+		NBId:   fmt.Sprint(generate.Number(2)),         // 基站ID
+		CellId: "1",                                    // 小区ID
+		TAC:    "4388",                                 // TAC
+		IMSI:   fmt.Sprintf("%d", generate.Number(15)), // IMSI
+		Result: model.UENB_RESULT_AUTH_SUCCESS,         // 结果值
+		Type:   model.UENB_TYPE_AUTH,                   // 终端接入基站类型
 	}
-	err := service.UENBPushURL(query.Url, &uenb)
+	err := s.srv.PushURL(query.Url, &uenb)
 	if err != nil {
 		c.JSON(200, resp.ErrMsg(err.Error()))
 		return

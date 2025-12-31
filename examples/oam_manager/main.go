@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/tsmask/go-oam"
+	"github.com/tsmask/go-oam/framework/config"
 )
 
 // 网元内已有gin的情况，兼容现有的oam_manager
@@ -14,21 +15,18 @@ func main() {
 	// oanGroup := r.Group("/oam")
 
 	// 加入OAM相关接口模块
-	o := oam.New(&oam.Opts{
-		License: oam.License{
-			NeType:     "NE",
+	o := oam.New(
+		oam.WithNEConfig(config.NEConfig{
+			Type:       "NE",
 			Version:    "1.0",
 			SerialNum:  "1234567890",
 			ExpiryDate: "2025-12-31",
 			NbNumber:   10,
 			UeNumber:   100,
-		},
-	})
+		}),
+	)
 	o.SetupCallback(new(oamCallback))
-	// if err := o.RouteExpose(oanGroup); err != nil {
-	if err := o.RouteExpose(r); err != nil {
-		fmt.Printf("oam run fail: %s\n", err.Error())
-	}
+	o.RouteEngine(r)
 
 	r.Run(":33030")
 }
@@ -47,9 +45,9 @@ func (o *oamCallback) Redis() any {
 	return nil
 }
 
-// Telent implements callback.CallbackHandler.
-func (o *oamCallback) Telent(command string) string {
-	return "Telent implements"
+// Telnet implements callback.CallbackHandler.
+func (o *oamCallback) Telnet(command string) string {
+	return "Telnet implements"
 }
 
 // SNMP implements callback.CallbackHandler.

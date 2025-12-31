@@ -3,16 +3,14 @@ package file
 import (
 	"fmt"
 	"mime/multipart"
+	"os"
 	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/tsmask/go-oam/framework/config"
-	"github.com/tsmask/go-oam/framework/utils/date"
 	"github.com/tsmask/go-oam/framework/utils/generate"
 	"github.com/tsmask/go-oam/framework/utils/parse"
 )
@@ -20,38 +18,45 @@ import (
 /**最大文件名长度 */
 const DEFAULT_FILE_NAME_LENGTH = 100
 
+// UploadFileListRow 文件列表行
+type UploadFileListRow struct {
+	Name    string `json:"name"`    // 文件名
+	Size    int64  `json:"size"`    // 文件大小
+	ModTime int64  `json:"modTime"` // 修改时间
+	IsDir   bool   `json:"isDir"`   // 是否目录
+}
+
 // 最大上传文件大小
-func uploadFileSize() int64 {
-	var fileSize int64 = 1 * 1024 * 1024
-	size := parse.Number(config.Get("upload.filesize"))
-	if size > 1 {
-		fileSize = size * 1024 * 1024
+func uploadFileSize(cfg *config.Config) int64 {
+	var size int64
+	cfg.View(func(c *config.Config) {
+		size = int64(c.Upload.FileSize)
+	})
+	if size < 1 {
+		size = 1
 	}
-	return fileSize
+	return size * 1024 * 1024
 }
 
 // 上传文件资源路径
-func uploadFileDir() string {
-	fileDir := fmt.Sprint(config.Get("upload.filedir"))
-	if fileDir == "" || fileDir == "<nil>" {
+func uploadFileDir(cfg *config.Config) string {
+	var fileDir string
+	cfg.View(func(c *config.Config) {
+		fileDir = c.Upload.FileDir
+	})
+	if fileDir == "" {
 		fileDir = "/tmp"
 	}
 	return fileDir
 }
 
 // 文件上传扩展名白名单
-func uploadWhiteList() []string {
-	arr, ok := config.Get("upload.whitelist").([]any)
-	if !ok {
-		return []string{}
-	}
-	strings := make([]string, len(arr))
-	for i, val := range arr {
-		if str, ok := val.(string); ok {
-			strings[i] = str
-		}
-	}
-	return strings
+func uploadWhiteList(cfg *config.Config) []string {
+	var list []string
+	cfg.View(func(c *config.Config) {
+		list = c.Upload.WhiteList
+	})
+	return list
 }
 
 // 生成文件名称 fileName_随机值.extName
@@ -77,14 +82,14 @@ func generateFileName(fileName string) string {
 // fileName 原始文件名称含后缀，如：oam_logo_iipc68.png
 //
 // allowExts 允许上传拓展类型，['.png']
-func isAllowWrite(fileName string, allowExts []string, fileSize int64) error {
+func IsAllowWrite(cfg *config.Config, fileName string, allowExts []string, fileSize int64) error {
 	// 判断上传文件名称长度
 	if len(fileName) > DEFAULT_FILE_NAME_LENGTH {
 		return fmt.Errorf("the maximum length limit for uploading file names is %d", DEFAULT_FILE_NAME_LENGTH)
 	}
 
 	// 最大上传文件大小
-	maxFileSize := uploadFileSize()
+	maxFileSize := uploadFileSize(cfg)
 	if fileSize > maxFileSize {
 		return fmt.Errorf("maximum upload file size %s", parse.Bit(float64(maxFileSize)))
 	}
@@ -93,230 +98,171 @@ func isAllowWrite(fileName string, allowExts []string, fileSize int64) error {
 	fileExt := filepath.Ext(fileName)
 	hasExt := false
 	if len(allowExts) == 0 {
-		allowExts = uploadWhiteList()
+		allowExts = uploadWhiteList(cfg)
 	}
 	if slices.Contains(allowExts, fileExt) {
 		hasExt = true
 	}
+
 	if !hasExt {
-		if len(allowExts) == 0 {
-			return fmt.Errorf("the upload file type is not supported")
-		}
-		return fmt.Errorf("the upload file type is not supported, only the following types are supported: %s", strings.Join(allowExts, ","))
+		return fmt.Errorf("unsupported upload file extensions %s", fileExt)
 	}
 
 	return nil
 }
 
-// 检查文件允许本地读取
-//
-// filePath 文件存放资源路径，URL相对地址
-func isAllowRead(filePath string) error {
-	// 禁止目录上跳级别
-	if strings.Contains(filePath, "..") {
-		return fmt.Errorf("prohibit jumping levels on the directory")
-	}
-
-	// 检查允许下载的文件规则
-	fileExt := filepath.Ext(filePath)
-	hasExt := false
-	for _, ext := range uploadWhiteList() {
-		if ext == fileExt {
-			hasExt = true
-			break
-		}
-	}
-	if !hasExt {
-		return fmt.Errorf("rules for illegally downloaded files: %s", fileExt)
-	}
-
-	return nil
+// GetFilePath 获取文件存储路径
+func GetFilePath(cfg *config.Config, fileName string) string {
+	dir := uploadFileDir(cfg)
+	// 如果目录不存在，尝试创建
+	// os.MkdirAll(dir, 0755)
+	return path.Join(dir, fileName)
 }
 
-// TransferUploadFile 上传资源文件转存
-//
-// allowExts 允许上传拓展类型（含“.”)，如 ['.png','.jpg']
-func TransferUploadFile(file *multipart.FileHeader, allowExts []string) (string, error) {
-	// 上传文件检查
-	err := isAllowWrite(file.Filename, allowExts, file.Size)
-	if err != nil {
+// Save 上传文件保存到本地
+func Save(cfg *config.Config, file *multipart.FileHeader) (string, error) {
+	// 校验文件是否允许上传
+	if err := IsAllowWrite(cfg, file.Filename, []string{}, file.Size); err != nil {
 		return "", err
 	}
-	// 上传资源路径
-	dir := uploadFileDir()
-	// 新文件名称并组装文件地址
-	filePath := date.ParseDatePath(time.Now())
+	// 生成文件名称
 	fileName := generateFileName(file.Filename)
-	writePathFile := filepath.Join(dir, filePath, fileName)
-	// 存入新文件路径
-	err = transferToNewFile(file, writePathFile)
-	if err != nil {
+	// 文件存储路径
+	filePath := GetFilePath(cfg, fileName)
+	return filePath, nil
+}
+
+// TransferUploadFile 上传文件转存
+func TransferUploadFile(cfg *config.Config, file *multipart.FileHeader, allowExts []string) (string, error) {
+	if err := IsAllowWrite(cfg, file.Filename, allowExts, file.Size); err != nil {
 		return "", err
 	}
-	return writePathFile, nil
+	fileName := generateFileName(file.Filename)
+	filePath := GetFilePath(cfg, fileName)
+	if err := transferToNewFile(file, filePath); err != nil {
+		return "", err
+	}
+	return filePath, nil
 }
 
-func TransferUploadBytes(fileName string, data []byte, allowExts []string) (string, error) {
-    err := isAllowWrite(fileName, allowExts, int64(len(data)))
-    if err != nil {
-        return "", err
-    }
-    dir := uploadFileDir()
-    filePath := date.ParseDatePath(time.Now())
-    newName := generateFileName(fileName)
-    writePathFile := filepath.Join(dir, filePath, newName)
-    if err = writeBytesToFile(writePathFile, data); err != nil {
-        return "", err
-    }
-    return writePathFile, nil
+// TransferUploadBytes 上传字节转存
+func TransferUploadBytes(cfg *config.Config, fileName string, bin []byte, allowExts []string) (string, error) {
+	if err := IsAllowWrite(cfg, fileName, allowExts, int64(len(bin))); err != nil {
+		return "", err
+	}
+	newFileName := generateFileName(fileName)
+	filePath := GetFilePath(cfg, newFileName)
+	if err := writeBytesToFile(filePath, bin); err != nil {
+		return "", err
+	}
+	return filePath, nil
 }
 
-// ReadUploadFileStream 上传资源文件读取
-//
-// filePath 文件存放资源路径，URL相对地址 如：/upload/common/2023/06/xxx.png
-//
-// headerRange 断点续传范围区间，bytes=0-12131
-func ReadUploadFileStream(fileAsbPath, headerRange string) (map[string]any, error) {
-	// 读取文件检查
-	err := isAllowRead(fileAsbPath)
+// TransferChunkUploadFile 切片文件上传转存
+func TransferChunkUploadFile(cfg *config.Config, file *multipart.FileHeader, index string, identifier string) (string, error) {
+	// 校验分片大小
+	if file.Size > 10*1024*1024 {
+		return "", fmt.Errorf("chunk size exceeds 10MB limit")
+	}
+
+	dir := uploadFileDir(cfg)
+	chunkDir := filepath.Join(dir, identifier)
+	chunkPath := filepath.Join(chunkDir, index)
+
+	if err := transferToNewFile(file, chunkPath); err != nil {
+		return "", err
+	}
+	return chunkPath, nil
+}
+
+// TransferChunkUploadBytes 切片字节上传转存
+func TransferChunkUploadBytes(cfg *config.Config, fileName string, index string, identifier string, bin []byte) (string, error) {
+	// 校验分片大小
+	if len(bin) > 2*1024*1024 {
+		return "", fmt.Errorf("chunk size exceeds 2MB limit")
+	}
+
+	dir := uploadFileDir(cfg)
+	chunkDir := filepath.Join(dir, identifier)
+	chunkPath := filepath.Join(chunkDir, index)
+
+	if err := writeBytesToFile(chunkPath, bin); err != nil {
+		return "", err
+	}
+	return chunkPath, nil
+}
+
+// ChunkCheckFile 切片文件检查
+func ChunkCheckFile(cfg *config.Config, identifier string, fileName string) ([]string, error) {
+	dir := uploadFileDir(cfg)
+	chunkDir := filepath.Join(dir, identifier)
+	if _, err := os.Stat(chunkDir); os.IsNotExist(err) {
+		return []string{}, nil
+	}
+	return getDirFileNameList(chunkDir)
+}
+
+// ChunkMergeFile 切片文件合并
+func ChunkMergeFile(cfg *config.Config, identifier string, fileName string) (string, error) {
+	dir := uploadFileDir(cfg)
+	chunkDir := filepath.Join(dir, identifier)
+	newFileName := generateFileName(fileName)
+	mergeFilePath := GetFilePath(cfg, newFileName)
+
+	if err := mergeToNewFile(chunkDir, mergeFilePath); err != nil {
+		return "", err
+	}
+	return mergeFilePath, nil
+}
+
+// ReadUploadFileStream 读取上传文件流
+func ReadUploadFileStream(cfg *config.Config, filePath string, rangeStr string) (map[string]any, error) {
+	// 简单解析 Range: bytes=start-end
+	var start, end int64
+	if rangeStr != "" {
+		fmt.Sscanf(rangeStr, "bytes=%d-%d", &start, &end)
+	}
+
+	data, err := getFileStream(filePath, start, end)
 	if err != nil {
-		return map[string]any{}, err
+		return nil, err
 	}
 
-	// 响应结果
-	result := map[string]any{
-		"range":     "",
-		"chunkSize": 0,
-		"fileSize":  0,
-		"data":      []byte{},
+	fileSize := getFileSize(filePath)
+	if end == 0 || end >= fileSize {
+		end = fileSize - 1
 	}
 
-	// 文件大小
-	fileSize := getFileSize(fileAsbPath)
-	if fileSize <= 0 {
-		return result, fmt.Errorf("file does not exist")
+	return map[string]any{
+		"data":  data,
+		"start": start,
+		"end":   end,
+		"total": fileSize,
+	}, nil
+}
+
+// UploadFileList 获取本地文件列表
+func UploadFileList(dirPath string, search string) ([]UploadFileListRow, error) {
+	files, err := os.ReadDir(dirPath)
+	if err != nil {
+		return nil, err
 	}
-	result["fileSize"] = fileSize
 
-	if headerRange != "" {
-		partsStr := strings.Replace(headerRange, "bytes=", "", 1)
-		parts := strings.Split(partsStr, "-")
-		start, err := strconv.ParseInt(parts[0], 10, 64)
-		if err != nil || start > fileSize {
-			start = 0
+	var rows []UploadFileListRow
+	for _, f := range files {
+		if search != "" && !strings.HasPrefix(f.Name(), search) {
+			continue
 		}
-		end, err := strconv.ParseInt(parts[1], 10, 64)
-		if err != nil || end > fileSize {
-			end = fileSize - 1
-		}
-		if start > end {
-			start = end
-		}
-
-		// 分片结果
-		result["range"] = fmt.Sprintf("bytes %d-%d/%d", start, end, fileSize)
-		result["chunkSize"] = end - start + 1
-		byteArr, err := getFileStream(fileAsbPath, start, end)
+		info, err := f.Info()
 		if err != nil {
-			return map[string]any{}, fmt.Errorf("fail to read file")
+			continue
 		}
-		result["data"] = byteArr
-		return result, nil
+		rows = append(rows, UploadFileListRow{
+			Name:    f.Name(),
+			Size:    info.Size(),
+			ModTime: info.ModTime().Unix(),
+			IsDir:   f.IsDir(),
+		})
 	}
-
-	byteArr, err := getFileStream(fileAsbPath, 0, fileSize)
-	if err != nil {
-		return map[string]any{}, fmt.Errorf("fail to read file")
-	}
-	result["data"] = byteArr
-	return result, nil
-}
-
-// TransferChunkUploadFile 上传资源切片文件转存
-//
-// file 上传文件对象
-//
-// index 切片文件序号
-//
-// identifier 切片文件目录标识符
-func TransferChunkUploadFile(file *multipart.FileHeader, index, identifier string) (string, error) {
-	// 上传文件检查
-	err := isAllowWrite(file.Filename, []string{}, file.Size)
-	if err != nil {
-		return "", err
-	}
-	// 上传资源路径
-	dir := uploadFileDir()
-	// 新文件名称并组装文件地址
-	filePath := date.ParseDatePath(time.Now())
-	writePathFile := path.Join(dir, filePath, "chunk", identifier, index)
-	// 存入新文件路径
-	err = transferToNewFile(file, writePathFile)
-	if err != nil {
-		return "", err
-	}
-	return filepath.ToSlash(writePathFile), nil
-}
-
-func TransferChunkUploadBytes(originalFileName, index, identifier string, data []byte) (string, error) {
-    err := isAllowWrite(originalFileName, []string{}, int64(len(data)))
-    if err != nil {
-        return "", err
-    }
-    dir := uploadFileDir()
-    filePath := date.ParseDatePath(time.Now())
-    writePathFile := path.Join(dir, filePath, "chunk", identifier, index)
-    if err = writeBytesToFile(writePathFile, data); err != nil {
-        return "", err
-    }
-    return filepath.ToSlash(writePathFile), nil
-}
-
-// 上传资源切片文件检查
-//
-// identifier 切片文件目录标识符
-//
-// originalFileName 原始文件名称，如logo.png
-func ChunkCheckFile(identifier, originalFileName string) ([]string, error) {
-	// 读取文件检查
-	err := isAllowWrite(originalFileName, []string{}, 0)
-	if err != nil {
-		return []string{}, err
-	}
-	// 上传资源路径
-	dir := uploadFileDir()
-	// 切片存放目录
-	filePath := date.ParseDatePath(time.Now())
-	readPath := path.Join(dir, filePath, "chunk", identifier)
-	fileList, err := getDirFileNameList(readPath)
-	if err != nil {
-		return []string{}, fmt.Errorf("fail to read file")
-	}
-	return fileList, nil
-}
-
-// 上传资源切片文件检查
-//
-// identifier 切片文件目录标识符
-//
-// originalFileName 原始文件名称，如logo.png
-func ChunkMergeFile(identifier, originalFileName string) (string, error) {
-	// 读取文件检查
-	err := isAllowWrite(originalFileName, []string{}, 0)
-	if err != nil {
-		return "", err
-	}
-	// 上传资源路径
-	dir := uploadFileDir()
-	// 新文件名称并组装文件地址
-	filePath := date.ParseDatePath(time.Now())
-	fileName := generateFileName(originalFileName)
-	writePathFile := filepath.Join(dir, filePath, fileName)
-	// 切片存放目录
-	readPath := path.Join(dir, filePath, "chunk", identifier)
-	err = mergeToNewFile(readPath, writePathFile)
-	if err != nil {
-		return "", err
-	}
-	return filepath.ToSlash(writePathFile), nil
+	return rows, nil
 }
