@@ -13,8 +13,11 @@ import (
 )
 
 // NewCommonController 创建通用推送控制器
-func NewCommonController() *CommonController {
-	return &CommonController{srv: service.NewCommon()}
+func NewCommonController(srv *service.Common) *CommonController {
+	if srv == nil {
+		srv = service.NewCommon()
+	}
+	return &CommonController{srv: srv}
 }
 
 // 通用

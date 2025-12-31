@@ -7,7 +7,6 @@ import (
 	"github.com/tsmask/go-oam"
 	"github.com/tsmask/go-oam/framework/config"
 	"github.com/tsmask/go-oam/modules/common"
-	"github.com/tsmask/go-oam/modules/push"
 	"github.com/tsmask/go-oam/modules/state"
 
 	"github.com/gin-gonic/gin"
@@ -24,6 +23,12 @@ func main() {
 			NbNumber:   10,
 			UeNumber:   100,
 		}),
+		oam.WithOMCConfig(config.OMCConfig{
+			URL:     "http://127.0.0.1:29565",
+			NeUID:   "1234567890",
+			CoreUID: "1234567890",
+		}),
+		oam.WithPush(), // 开启推送功能
 	)
 
 	// 周期模拟
@@ -33,7 +38,7 @@ func main() {
 		for {
 			t := <-timer.C
 
-			// 发话单
+			// 发通用记录
 			common := oam.Common{
 				Type: "common",
 				Data: map[string]any{
@@ -53,10 +58,10 @@ func main() {
 			alarm := oam.Alarm{
 				AlarmId:           alarmId,                            // 告警ID
 				AlarmCode:         100,                                // 告警状态码
-				AlarmType:         oam.ALARM_TYPE_COMMUNICATION_ALARM, // 告警类型 CommunicationAlarm,EquipmentAlarm,ProcessingFailure,EnvironmentalAlarm,QualityOfServiceAlarm
+				AlarmType:         oam.ALARM_TYPE_COMMUNICATION_ALARM, // 告警类型
 				AlarmTitle:        "Alarm Test",                       // 告警标题
-				PerceivedSeverity: oam.ALARM_SEVERITY_MAJOR,           // 告警级别 Critical,Major,Minor,Warning,Event
-				AlarmStatus:       oam.ALARM_STATUS_ACTIVE,            // 告警状态 Clear,Active
+				PerceivedSeverity: oam.ALARM_SEVERITY_MAJOR,           // 告警级别
+				AlarmStatus:       oam.ALARM_STATUS_ACTIVE,            // 告警状态
 				SpecificProblem:   "Alarm Test",                       // 告警问题原因
 				SpecificProblemID: "100",                              // 告警问题原因ID
 				AddInfo:           "addInfo",                          // 告警辅助信息
@@ -103,12 +108,10 @@ func main() {
 
 			// 发话单
 			cdr := oam.CDR{
-				IMSI:       "460991100000000",      // IMSI
-				NBId:       fmt.Sprint(t.Second()), // 基站ID
-				CellId:     "1",                    // 小区ID
-				TAC:        "4388",                 // TAC
-				CallTime:   time.Now().UnixMilli(), // 呼叫时间
-				CallLength: 10,                     // 呼叫时长
+				Data: map[string]any{
+					"cdrSecond": t.Second(),
+					"cdrTime":   t.UnixMilli(),
+				},
 			}
 			errs = o.Push.CDR(&cdr)
 			if errs != nil {
@@ -134,8 +137,8 @@ func main() {
 	o.SetupRoute(func(r gin.IRouter) {
 		common.SetupRoute(r)
 		state.SetupRoute(r)
-		push.SetupRouteAlarm(r)
-		push.SetupRouteCDR(r)
+		// o.Push 中的所有 Service 实例
+		o.SetupPushRoute(r)
 	})
 
 	// 运行 SDK 逻辑

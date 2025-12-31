@@ -15,6 +15,7 @@ type OAM struct {
 	cfg      *config.Config
 	handler  callback.CallbackHandler
 	setupArr []func(gin.IRouter)
+	Push     *Push
 }
 
 // Option Functional Options 接口
@@ -77,6 +78,13 @@ func WithCallbackHandler(handler callback.CallbackHandler) Option {
 	}
 }
 
+// WithPush 开启推送功能
+func WithPush() Option {
+	return func(o *OAM) {
+		o.Push = NewPush(o)
+	}
+}
+
 // New 创建 OAM 实例
 func New(opts ...Option) *OAM {
 	o := &OAM{
@@ -90,6 +98,14 @@ func New(opts ...Option) *OAM {
 		opt(o)
 	}
 	return o
+}
+
+// SetupPushRoute 注册推送相关路由
+func (o *OAM) SetupPushRoute(router gin.IRouter) {
+	if o.Push == nil {
+		o.Push = NewPush(o)
+	}
+	o.Push.SetupRoute(router)
 }
 
 // SetupCallback 相关回调功能

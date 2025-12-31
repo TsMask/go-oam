@@ -18,6 +18,7 @@ omc:
   url: "" # 网管目标地址
   coreUID: "" # 网管上核心网唯一标识
   neUID: "" # 网管上网元唯一标识
+  kpiGranularity: 0 # KPI 指标推送周期(单位秒), 0 表示不开启定时推送
 
 # 文件上传
 upload:

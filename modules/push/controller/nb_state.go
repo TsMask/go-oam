@@ -13,8 +13,11 @@ import (
 )
 
 // NewNBStateController 创建基站状态控制器
-func NewNBStateController() *NBStateController {
-	return &NBStateController{srv: service.NewNBState()}
+func NewNBStateController(srv *service.NBState) *NBStateController {
+	if srv == nil {
+		srv = service.NewNBState()
+	}
+	return &NBStateController{srv: srv}
 }
 
 // 基站状态

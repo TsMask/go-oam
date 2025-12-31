@@ -53,9 +53,10 @@ type NEConfig struct {
 
 // OMCConfig 网管信息配置
 type OMCConfig struct {
-	URL     string `yaml:"url" json:"url"`         // 网管地址 如：http://127.0.0.1:5678
-	CoreUID string `yaml:"coreUID" json:"coreUID"` // 核心网唯一标识 12345678
-	NeUID   string `yaml:"neUID" json:"neUID"`     // 网元唯一标识 如：12345678
+	URL            string `yaml:"url" json:"url"`                       // 网管地址 如：http://127.0.0.1:5678
+	NeUID          string `yaml:"neUID" json:"neUID"`                   // 网元唯一标识 如：12345678
+	CoreUID        string `yaml:"coreUID" json:"coreUID"`               // 核心网唯一标识 12345678
+	KPIGranularity int    `yaml:"kpiGranularity" json:"kpiGranularity"` // KPI 采集粒度 单位秒
 }
 
 // UploadConfig 文件上传配置

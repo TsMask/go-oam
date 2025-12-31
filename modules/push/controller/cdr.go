@@ -12,8 +12,11 @@ import (
 )
 
 // NewCDRController 创建话单控制器
-func NewCDRController() *CDRController {
-	return &CDRController{srv: service.NewCDR()}
+func NewCDRController(srv *service.CDR) *CDRController {
+	if srv == nil {
+		srv = service.NewCDR()
+	}
+	return &CDRController{srv: srv}
 }
 
 // 话单

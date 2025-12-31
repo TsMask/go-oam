@@ -163,18 +163,18 @@ func (s *KPI) KeyDec(key string) {
 }
 
 // KeyAdd 原子增加指定值
-func (s *KPI) KeyAdd(key string, delta float64) {
+func (s *KPI) KeyAdd(key string, v float64) {
 	if s == nil {
 		return
 	}
 
 	atomicVal := s.getOrCreateAtomicValue(key)
-	deltaUint := uint64(math.Abs(delta * precisionMultiplier))
+	vUint := uint64(math.Abs(v * precisionMultiplier))
 
-	if delta >= 0 {
-		atomicVal.Add(deltaUint)
+	if v >= 0 {
+		atomicVal.Add(vUint)
 	} else {
-		atomicVal.Add(^uint64(deltaUint - 1))
+		atomicVal.Add(^uint64(vUint - 1))
 	}
 }
 

@@ -13,8 +13,11 @@ import (
 )
 
 // NewUENBController 创建 UENB 控制器
-func NewUENBController() *UENBController {
-	return &UENBController{srv: service.NewUENB()}
+func NewUENBController(srv *service.UENB) *UENBController {
+	if srv == nil {
+		srv = service.NewUENB()
+	}
+	return &UENBController{srv: srv}
 }
 
 // 终端接入基站

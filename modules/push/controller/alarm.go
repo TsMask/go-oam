@@ -13,8 +13,11 @@ import (
 )
 
 // NewAlarmController 创建告警控制器
-func NewAlarmController() *AlarmController {
-	return &AlarmController{srv: service.NewAlarm()}
+func NewAlarmController(srv *service.Alarm) *AlarmController {
+	if srv == nil {
+		srv = service.NewAlarm()
+	}
+	return &AlarmController{srv: srv}
 }
 
 // 告警
