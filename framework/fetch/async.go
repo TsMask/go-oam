@@ -15,15 +15,28 @@ type pushJob struct {
 
 var (
 	pushQueue chan pushJob
-	pushOnce  sync.Once
+	workerCt  = 2
+	queueSz   = 100
+	initOnce  sync.Once
 )
 
-func startPushWorkers() {
-	if pushQueue == nil {
-		pushQueue = make(chan pushJob, 100)
-	}
-	workers := 4
-	for range workers {
+// AsyncInit 初始化异步推送配置
+// 注意：必须在首次调用 AsyncPush 前调用此方法，否则使用默认配置
+func AsyncInit(workerCount, queueSize int) {
+	initOnce.Do(func() {
+		if workerCount > 0 {
+			workerCt = workerCount
+		}
+		if queueSize > 0 {
+			queueSz = queueSize
+		}
+		pushQueue = make(chan pushJob, queueSz)
+		startWorkers()
+	})
+}
+
+func startWorkers() {
+	for i := 0; i < workerCt; i++ {
 		go func() {
 			for job := range pushQueue {
 				ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -37,12 +50,13 @@ func startPushWorkers() {
 	}
 }
 
-func init() {
-	pushOnce.Do(startPushWorkers)
-}
+// AsyncPush 尝试异步POST推送，如果队列满则降级为同步推送
+func AsyncPush(ctx context.Context, url string, payload any) error {
+	// 确保初始化
+	if pushQueue == nil {
+		AsyncInit(0, 0)
+	}
 
-// Push 尝试异步推送，如果队列满则降级为同步推送
-func Push(ctx context.Context, url string, payload any) error {
 	select {
 	case pushQueue <- pushJob{url: url, payload: payload}:
 		return nil

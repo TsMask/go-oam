@@ -312,7 +312,7 @@ func (s *KPI) Send(url, neUid string, granularity int64, dataMap map[string]floa
 	s.safeAppendHistory(k)
 
 	// 发送推送请求
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
-	return fetch.Push(ctx, url, k)
+	return fetch.AsyncPush(ctx, url, k)
 }

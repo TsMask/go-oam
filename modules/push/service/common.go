@@ -127,7 +127,7 @@ func (s *Common) PushURL(url string, common *model.Common) error {
 	s.safeAppendCommonHistory(common.Type, common)
 
 	// 发送
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
-	return fetch.Push(ctx, url, common)
+	return fetch.AsyncPush(ctx, url, common)
 }

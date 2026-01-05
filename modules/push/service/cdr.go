@@ -110,7 +110,7 @@ func (s *CDR) PushURL(url string, cdr *model.CDR) error {
 	s.safeAppendHistory(*cdr)
 
 	// 发送
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
-	return fetch.Push(ctx, url, cdr)
+	return fetch.AsyncPush(ctx, url, cdr)
 }

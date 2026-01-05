@@ -112,5 +112,5 @@ func (s *Alarm) PushURL(url string, alarm *model.Alarm) error {
 	// 发送
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
-	return fetch.Push(ctx, url, alarm)
+	return fetch.AsyncPush(ctx, url, alarm)
 }

@@ -111,7 +111,7 @@ func (s *UENB) PushURL(url string, uenb *model.UENB) error {
 	s.safeAppendHistory(*uenb)
 
 	// 发送
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
-	return fetch.Push(ctx, url, uenb)
+	return fetch.AsyncPush(ctx, url, uenb)
 }

@@ -111,7 +111,7 @@ func (s *NBState) PushURL(url string, nbState *model.NBState) error {
 	s.safeAppendHistory(*nbState)
 
 	// 发送
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
-	return fetch.Push(ctx, url, nbState)
+	return fetch.AsyncPush(ctx, url, nbState)
 }
