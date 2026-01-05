@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync"
+	"time"
 )
 
 // Server 服务参数
@@ -12,6 +14,7 @@ type Server struct {
 	Port     string           `json:"port"` // telnet端口
 	listener *net.TCPListener // 监听服务
 	stopChan chan struct{}    // 停止信号
+	stopOnce sync.Once        // 停止一次
 }
 
 // New 服务创建监听
@@ -42,10 +45,12 @@ func (s *Server) Listen() error {
 
 // Close 关闭当前服务
 func (s *Server) Close() {
-	if s.listener != nil {
-		s.stopChan <- struct{}{}
-		s.listener.Close()
-	}
+	s.stopOnce.Do(func() {
+		if s.listener != nil {
+			close(s.stopChan)
+			s.listener.Close()
+		}
+	})
 }
 
 // Resolve 处理消息
@@ -69,10 +74,23 @@ func (t *Server) Resolve(callback func(conn net.Conn, err error)) {
 		default:
 			conn, err := t.listener.Accept()
 			if err != nil {
-				continue
+				select {
+				case <-t.stopChan:
+					return
+				default:
+					time.Sleep(100 * time.Millisecond)
+					continue
+				}
 			}
-			defer conn.Close()
-			callback(conn, nil)
+			go func(c net.Conn) {
+				defer c.Close()
+				defer func() {
+					if err := recover(); err != nil {
+						callback(nil, fmt.Errorf("telnet connection handler panic: %v", err))
+					}
+				}()
+				callback(c, nil)
+			}(conn)
 		}
 	}
 }

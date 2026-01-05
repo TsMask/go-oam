@@ -1,40 +1,20 @@
 package telnet
 
 import (
-	"fmt"
 	"strings"
 )
 
 // ConvertToStr 转换为string
 func ConvertToStr(output string) (string, error) {
-	str := strings.ToLower(output)
-
-	// 截断
-	index := strings.Index(str, "\n")
+	index := strings.Index(output, "\n")
 	if index != -1 {
-		str = str[:index]
+		output = output[:index]
 	}
-
-	// 命令成功
-	if strings.Contains(str, "ok") || strings.Contains(str, "success") {
-		return str, nil
-	}
-
-	return "", fmt.Errorf("%s", str)
+	return strings.TrimSpace(output), nil
 }
 
 // ConvertToMap 转换为map
 func ConvertToMap(output string) (map[string]string, error) {
-	// 无数据
-	if strings.HasPrefix(output, "No ") {
-		// 截断
-		index := strings.Index(output, "\n")
-		if index != -1 {
-			output = output[:index]
-		}
-		return nil, fmt.Errorf("%s", output)
-	}
-
 	// 初始化一个map用于存储拆分后的键值对
 	m := make(map[string]string)
 

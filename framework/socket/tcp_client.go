@@ -3,6 +3,7 @@ package socket
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"net"
 	"strings"
 	"time"
@@ -22,7 +23,6 @@ func (c *ClientTCP) Connect() error {
 	proto := "tcp"
 	if strings.Contains(c.Addr, ":") {
 		proto = "tcp6"
-		c.Addr = fmt.Sprintf("[%s]", c.Addr)
 	}
 	address := net.JoinHostPort(c.Addr, c.Port)
 
@@ -65,29 +65,39 @@ func (c *ClientTCP) Send(msg []byte, timeout time.Duration) (string, error) {
 	var buf bytes.Buffer
 	defer buf.Reset()
 
+	// 设置读取超时
+	if err := conn.SetReadDeadline(time.Now().Add(timeout)); err != nil {
+		return "", fmt.Errorf("set read deadline error: %v", err)
+	}
+
 	tmp := make([]byte, 1024)
 	for {
-		select {
-		case <-time.After(timeout):
-			return buf.String(), fmt.Errorf("timeout")
-		default:
-			// 读取命令消息
-			n, err := conn.Read(tmp)
-			if n == 0 || err != nil {
-				tmp = nil
+		// 读取命令消息
+		n, err := conn.Read(tmp)
+		if err != nil {
+			// 检查是否是超时错误
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				return buf.String(), fmt.Errorf("timeout")
+			}
+			if err == io.EOF {
 				break
 			}
-			buf.Write(tmp[:n])
-			tmpStr := string(tmp[:n])
+			return buf.String(), err
+		}
+		if n == 0 {
+			break
+		}
 
-			// 是否有终止符
-			arr := []string{">", "#", "# ", "> "}
-			for _, v := range arr {
-				if strings.HasSuffix(tmpStr, v) {
-					tmp = nil
-					return buf.String(), nil
-				}
+		buf.Write(tmp[:n])
+		tmpStr := string(tmp[:n])
+
+		// 是否有终止符
+		arr := []string{">", "#", "# ", "> "}
+		for _, v := range arr {
+			if strings.HasSuffix(tmpStr, v) {
+				return buf.String(), nil
 			}
 		}
 	}
+	return buf.String(), nil
 }

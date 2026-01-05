@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync"
+	"time"
 )
 
 // ServerTCP TCP服务端
@@ -12,6 +14,7 @@ type ServerTCP struct {
 	Port     string           `json:"port"` // 端口
 	listener *net.TCPListener // 监听服务
 	stopChan chan struct{}    // 停止信号
+	stopOnce sync.Once        // 停止一次
 }
 
 // Listen 创建TCP服务端
@@ -20,7 +23,6 @@ func (s *ServerTCP) Listen() error {
 	proto := "tcp"
 	if strings.Contains(s.Addr, ":") {
 		proto = "tcp6"
-		s.Addr = fmt.Sprintf("[%s]", s.Addr)
 	}
 	address := net.JoinHostPort(s.Addr, s.Port)
 
@@ -43,10 +45,12 @@ func (s *ServerTCP) Listen() error {
 
 // Close 关闭当前TCP服务端
 func (s *ServerTCP) Close() {
-	if s.listener != nil {
-		s.stopChan <- struct{}{}
-		s.listener.Close()
-	}
+	s.stopOnce.Do(func() {
+		if s.listener != nil {
+			close(s.stopChan)
+			s.listener.Close()
+		}
+	})
 }
 
 // Resolve 处理消息
@@ -70,10 +74,26 @@ func (s *ServerTCP) Resolve(callback func(conn net.Conn, err error)) {
 		default:
 			conn, err := s.listener.Accept()
 			if err != nil {
-				continue
+				// 避免在 listener 关闭后进入紧密循环
+				select {
+				case <-s.stopChan:
+					return
+				default:
+					// 如果是临时错误，休眠一小段时间
+					time.Sleep(100 * time.Millisecond)
+					continue
+				}
 			}
-			defer conn.Close()
-			callback(conn, nil)
+			go func(c net.Conn) {
+				defer c.Close()
+				defer func() {
+					if err := recover(); err != nil {
+						// 记录 panic，避免 crashing 整个服务
+						callback(nil, fmt.Errorf("tcp connection handler panic: %v", err))
+					}
+				}()
+				callback(c, nil)
+			}(conn)
 		}
 	}
 }
