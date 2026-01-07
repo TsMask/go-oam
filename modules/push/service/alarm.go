@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/tsmask/go-oam/framework/fetch"
@@ -14,18 +15,18 @@ const ALARM_PUSH_URI = "/push/alarm/receive"
 
 // Alarm 告警服务
 type Alarm struct {
-	alarmHistorys           []model.Alarm // 告警历史记录
-	alarmHistorysMux        sync.RWMutex  // 保护alarmHistorys的并发访问
-	alarmHistorysMaxSize    int           // 最大历史记录数量
-	alarmHistorysMaxSizeMux sync.RWMutex  // 保护修改数量的并发访问
+	alarmHistorys        []model.Alarm // 告警历史记录
+	alarmHistorysMux     sync.RWMutex  // 保护alarmHistorys的并发访问
+	alarmHistorysMaxSize atomic.Int32  // 最大历史记录数量
 }
 
 // NewAlarm 创建告警服务
 func NewAlarm() *Alarm {
-	return &Alarm{
-		alarmHistorys:        []model.Alarm{},
-		alarmHistorysMaxSize: 4096,
+	a := &Alarm{
+		alarmHistorys: []model.Alarm{},
 	}
+	a.alarmHistorysMaxSize.Store(4096)
+	return a
 }
 
 // HistoryList 线程安全地获取历史列表
@@ -64,16 +65,10 @@ func (s *Alarm) safeAppendHistory(alarm model.Alarm) {
 	s.alarmHistorysMux.Lock()
 	defer s.alarmHistorysMux.Unlock()
 
-	// 获取最大历史记录数
-	s.alarmHistorysMaxSizeMux.RLock()
-	maxSize := s.alarmHistorysMaxSize
-	s.alarmHistorysMaxSizeMux.RUnlock()
-
-	if len(s.alarmHistorys) >= maxSize {
-		// 如果超过，删除最旧的记录（索引为0的记录）
+	maxSize := s.alarmHistorysMaxSize.Load()
+	if len(s.alarmHistorys) >= int(maxSize) {
 		s.alarmHistorys = s.alarmHistorys[1:]
 	}
-
 	s.alarmHistorys = append(s.alarmHistorys, alarm)
 }
 
@@ -81,23 +76,16 @@ func (s *Alarm) safeAppendHistory(alarm model.Alarm) {
 // 如果新的最大数量小于当前记录数，会自动清理旧记录
 func (s *Alarm) HistorySetSize(newSize int) {
 	if s == nil || newSize <= 0 {
-		return // 无效的大小，不做任何修改
+		return
 	}
 
-	// 先更新最大记录数
-	s.alarmHistorysMaxSizeMux.Lock()
-	oldSize := s.alarmHistorysMaxSize
-	s.alarmHistorysMaxSize = newSize
-	s.alarmHistorysMaxSizeMux.Unlock()
-
-	// 如果新的最大数量小于旧的最大数量，可能需要清理历史记录
-	if newSize < oldSize {
+	oldSize := s.alarmHistorysMaxSize.Swap(int32(newSize))
+	if newSize < int(oldSize) {
 		s.alarmHistorysMux.Lock()
 		defer s.alarmHistorysMux.Unlock()
 
-		// 如果历史记录数超过最大允许数量，只保留最新的记录
-		if len(s.alarmHistorys) > s.alarmHistorysMaxSize {
-			s.alarmHistorys = s.alarmHistorys[len(s.alarmHistorys)-s.alarmHistorysMaxSize:]
+		if len(s.alarmHistorys) > newSize {
+			s.alarmHistorys = s.alarmHistorys[len(s.alarmHistorys)-newSize:]
 		}
 	}
 }

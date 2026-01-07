@@ -20,25 +20,25 @@ const precisionMultiplier = 1000
 
 // KPI 指标服务
 type KPI struct {
-	NeUid                 string             // 网元唯一标识
-	Granularity           time.Duration      // 指标缓存时间粒度
-	data                  sync.Map           // 存储string -> *atomic.Uint64
-	clearMutex            sync.Mutex         // 保护清空操作
-	kpiTimerCancel        context.CancelFunc // KPI 定时发送取消函数
-	kpiHistorys           []model.KPI        // KPI历史记录
-	kpiHistorysMux        sync.RWMutex       // 保护kpiHistorys的并发访问
-	kpiHistorysMaxSize    int                // 最大历史记录数量
-	kpiHistorysMaxSizeMux sync.RWMutex       // 保护修改数量的并发访问
+	NeUid              string             // 网元唯一标识
+	Granularity        time.Duration      // 指标缓存时间粒度
+	data               sync.Map           // 存储string -> *atomic.Uint64
+	clearMutex         sync.Mutex         // 保护清空操作
+	kpiTimerCancel     context.CancelFunc // KPI 定时发送取消函数
+	kpiHistorys        []model.KPI        // KPI历史记录
+	kpiHistorysMux     sync.RWMutex       // 保护kpiHistorys的并发访问
+	kpiHistorysMaxSize atomic.Int32       // 最大历史记录数量
 }
 
 // NewKPI 创建KPI服务
 func NewKPI(neUid string, granularity time.Duration) *KPI {
-	return &KPI{
-		NeUid:              neUid,
-		Granularity:        granularity,
-		kpiHistorys:        []model.KPI{},
-		kpiHistorysMaxSize: 4096,
+	k := &KPI{
+		NeUid:       neUid,
+		Granularity: granularity,
+		kpiHistorys: []model.KPI{},
 	}
+	k.kpiHistorysMaxSize.Store(4096)
+	return k
 }
 
 // KPITimerStart KPI定时发送
@@ -242,22 +242,15 @@ func (s *KPI) HistoryList(n int) []model.KPI {
 // 如果新的最大数量小于当前记录数，会自动清理旧记录
 func (s *KPI) HistorySetSize(newSize int) {
 	if s == nil || newSize <= 0 {
-		return // 无效的大小，不做任何修改
+		return
 	}
 
-	// 先更新最大记录数
-	s.kpiHistorysMaxSizeMux.Lock()
-	oldSize := s.kpiHistorysMaxSize
-	s.kpiHistorysMaxSize = newSize
-	s.kpiHistorysMaxSizeMux.Unlock()
-
-	// 如果新的最大数量小于旧的最大数量，可能需要清理历史记录
-	if newSize < oldSize {
+	oldSize := s.kpiHistorysMaxSize.Swap(int32(newSize))
+	if newSize < int(oldSize) {
 		s.kpiHistorysMux.Lock()
 		defer s.kpiHistorysMux.Unlock()
-		// 如果历史记录数超过最大允许数量，只保留最新的记录
-		if len(s.kpiHistorys) > s.kpiHistorysMaxSize {
-			s.kpiHistorys = s.kpiHistorys[len(s.kpiHistorys)-s.kpiHistorysMaxSize:]
+		if len(s.kpiHistorys) > newSize {
+			s.kpiHistorys = s.kpiHistorys[len(s.kpiHistorys)-newSize:]
 		}
 	}
 }
@@ -270,13 +263,8 @@ func (s *KPI) safeAppendHistory(kpi model.KPI) {
 	s.kpiHistorysMux.Lock()
 	defer s.kpiHistorysMux.Unlock()
 
-	// 获取最大历史记录数
-	s.kpiHistorysMaxSizeMux.RLock()
-	maxSize := s.kpiHistorysMaxSize
-	s.kpiHistorysMaxSizeMux.RUnlock()
-
-	if len(s.kpiHistorys) >= maxSize {
-		// 如果超过，删除最旧的记录（索引为0的记录）
+	maxSize := s.kpiHistorysMaxSize.Load()
+	if len(s.kpiHistorys) >= int(maxSize) {
 		s.kpiHistorys = s.kpiHistorys[1:]
 	}
 

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/tsmask/go-oam/framework/fetch"
@@ -14,16 +15,15 @@ const COMMON_PUSH_URI = "/push/common/receive"
 
 // Common 通用服务
 type Common struct {
-	commonHistorys           sync.Map     // commonHistorys 通用历史记录
-	commonHistorysMaxSizeMux sync.RWMutex // 保护最大历史记录数的锁
-	commonHistorysMaxSize    int          // 最大历史记录数
+	commonHistorys        sync.Map     // commonHistorys 通用历史记录
+	commonHistorysMaxSize atomic.Int32 // 最大历史记录数
 }
 
 // NewCommon 创建通用服务
 func NewCommon() *Common {
-	return &Common{
-		commonHistorysMaxSize: 4096,
-	}
+	c := &Common{}
+	c.commonHistorysMaxSize.Store(4096)
+	return c
 }
 
 // HistoryList 线程安全地获取历史列表
@@ -68,26 +68,18 @@ func (s *Common) safeAppendCommonHistory(typeStr string, common *model.Common) {
 	if s == nil {
 		return
 	}
-	// 获取当前历史记录，如果不存在则创建空切片
 	history, _ := s.commonHistorys.LoadOrStore(typeStr, []model.Common{})
 	commonHistorysList := history.([]model.Common)
 
-	// 获取最大历史记录数
-	s.commonHistorysMaxSizeMux.RLock()
-	maxSize := s.commonHistorysMaxSize
-	s.commonHistorysMaxSizeMux.RUnlock()
-
-	// 创建新的切片，避免直接修改原切片
+	maxSize := s.commonHistorysMaxSize.Load()
 	newHistorys := make([]model.Common, len(commonHistorysList)+1)
 	copy(newHistorys, commonHistorysList)
 	newHistorys[len(newHistorys)-1] = *common
 
-	// 如果超过最大记录数，删除最旧的记录
-	if len(newHistorys) > maxSize {
-		newHistorys = newHistorys[len(newHistorys)-maxSize:]
+	if len(newHistorys) > int(maxSize) {
+		newHistorys = newHistorys[len(newHistorys)-int(maxSize):]
 	}
 
-	// 存储更新后的历史记录
 	s.commonHistorys.Store(typeStr, newHistorys)
 }
 
@@ -97,17 +89,11 @@ func (s *Common) HistorySetSize(newSize int) {
 	if s == nil {
 		return
 	}
-	s.commonHistorysMaxSizeMux.Lock()
-	oldSize := s.commonHistorysMaxSize
-	s.commonHistorysMaxSize = newSize
-	s.commonHistorysMaxSizeMux.Unlock()
-
-	// 如果新的最大数量小于旧的最大数量，需要清理历史记录
-	if newSize < oldSize {
+	oldSize := s.commonHistorysMaxSize.Swap(int32(newSize))
+	if newSize < int(oldSize) {
 		s.commonHistorys.Range(func(key, value interface{}) bool {
 			if history, ok := value.([]model.Common); ok {
 				if len(history) > newSize {
-					// 只保留最新的记录
 					s.commonHistorys.Store(key, history[len(history)-newSize:])
 				}
 			}

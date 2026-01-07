@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/tsmask/go-oam/framework/fetch"
@@ -14,18 +15,18 @@ const CDR_PUSH_URI = "/push/cdr/receive"
 
 // CDR 话单服务
 type CDR struct {
-	cdrHistorys           []model.CDR  // 话单历史记录
-	cdrHistorysMux        sync.RWMutex // 保护cdrHistorys的并发访问
-	cdrHistorysMaxSize    int          // 最大历史记录数量
-	cdrHistorysMaxSizeMux sync.RWMutex // 保护修改数量的并发访问
+	cdrHistorys        []model.CDR  // 话单历史记录
+	cdrHistorysMux     sync.RWMutex // 保护cdrHistorys的并发访问
+	cdrHistorysMaxSize atomic.Int32 // 最大历史记录数量
 }
 
 // NewCDR 创建话单服务
 func NewCDR() *CDR {
-	return &CDR{
-		cdrHistorys:        []model.CDR{},
-		cdrHistorysMaxSize: 4096,
+	c := &CDR{
+		cdrHistorys: []model.CDR{},
 	}
+	c.cdrHistorysMaxSize.Store(4096)
+	return c
 }
 
 // HistoryList 线程安全地获取历史列表
@@ -64,13 +65,8 @@ func (s *CDR) safeAppendHistory(cdr model.CDR) {
 	s.cdrHistorysMux.Lock()
 	defer s.cdrHistorysMux.Unlock()
 
-	// 获取最大历史记录数
-	s.cdrHistorysMaxSizeMux.RLock()
-	maxSize := s.cdrHistorysMaxSize
-	s.cdrHistorysMaxSizeMux.RUnlock()
-
-	if len(s.cdrHistorys) >= maxSize {
-		// 如果超过，删除最旧的记录（索引为0的记录）
+	maxSize := s.cdrHistorysMaxSize.Load()
+	if len(s.cdrHistorys) >= int(maxSize) {
 		s.cdrHistorys = s.cdrHistorys[1:]
 	}
 
@@ -81,23 +77,16 @@ func (s *CDR) safeAppendHistory(cdr model.CDR) {
 // 如果新的最大数量小于当前记录数，会自动清理旧记录
 func (s *CDR) HistorySetSize(newSize int) {
 	if s == nil || newSize <= 0 {
-		return // 无效的大小，不做任何修改
+		return
 	}
 
-	// 先更新最大记录数
-	s.cdrHistorysMaxSizeMux.Lock()
-	oldSize := s.cdrHistorysMaxSize
-	s.cdrHistorysMaxSize = newSize
-	s.cdrHistorysMaxSizeMux.Unlock()
-
-	// 如果新的最大数量小于旧的最大数量，可能需要清理历史记录
-	if newSize < oldSize {
+	oldSize := s.cdrHistorysMaxSize.Swap(int32(newSize))
+	if newSize < int(oldSize) {
 		s.cdrHistorysMux.Lock()
 		defer s.cdrHistorysMux.Unlock()
 
-		// 如果历史记录数超过最大允许数量，只保留最新的记录
-		if len(s.cdrHistorys) > s.cdrHistorysMaxSize {
-			s.cdrHistorys = s.cdrHistorys[len(s.cdrHistorys)-s.cdrHistorysMaxSize:]
+		if len(s.cdrHistorys) > newSize {
+			s.cdrHistorys = s.cdrHistorys[len(s.cdrHistorys)-newSize:]
 		}
 	}
 }
