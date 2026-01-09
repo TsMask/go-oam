@@ -67,7 +67,7 @@ func (s UENBController) Test(c *gin.Context) {
 		Result: model.UENB_RESULT_AUTH_SUCCESS,         // 结果值
 		Type:   model.UENB_TYPE_AUTH,                   // 终端接入基站类型
 	}
-	err := s.srv.PushURL(query.Url, &uenb)
+	err := s.srv.PushURL(query.Url, &uenb, 0)
 	if err != nil {
 		c.JSON(200, resp.ErrMsg(err.Error()))
 		return

@@ -56,6 +56,13 @@ const (
 	UENB_RESULT_CM_CONNECTED                            = model.UENB_RESULT_CM_CONNECTED
 	UENB_RESULT_CM_IDLE                                 = model.UENB_RESULT_CM_IDLE
 	UENB_RESULT_CM_INACTIVE                             = model.UENB_RESULT_CM_INACTIVE
+
+	ALARM_PUSH_URI    = service.ALARM_PUSH_URI
+	CDR_PUSH_URI      = service.CDR_PUSH_URI
+	COMMON_PUSH_URI   = service.COMMON_PUSH_URI
+	KPI_PUSH_URI      = service.KPI_PUSH_URI
+	NB_STATE_PUSH_URI = service.NB_STATE_PUSH_URI
+	UENB_PUSH_URI     = service.UENB_PUSH_URI
 )
 
 // Push 推送功能集
@@ -225,11 +232,11 @@ func (p *Push) Alarm(alarm *model.Alarm) error {
 	}
 
 	url := p.joinURL(baseURL, service.ALARM_PUSH_URI)
-	return p.getAlarmSrv().PushURL(url, alarm)
+	return p.getAlarmSrv().PushURL(url, alarm, 0)
 }
 
 // AlarmURL 推送告警自定义URL
-func (p *Push) AlarmURL(url string, alarm *model.Alarm) error {
+func (p *Push) AlarmURL(url string, alarm *model.Alarm, timeout time.Duration) error {
 	var neUid string
 	p.o.cfg.View(func(c *config.Config) {
 		neUid = c.OMC.NeUID
@@ -237,7 +244,7 @@ func (p *Push) AlarmURL(url string, alarm *model.Alarm) error {
 	if alarm.NeUid == "" {
 		alarm.NeUid = neUid
 	}
-	return p.getAlarmSrv().PushURL(url, alarm)
+	return p.getAlarmSrv().PushURL(url, alarm, timeout)
 }
 
 // AlarmHistoryList 获取告警推送历史
@@ -267,11 +274,11 @@ func (p *Push) Common(common *model.Common) error {
 	}
 
 	url := p.joinURL(baseURL, service.COMMON_PUSH_URI)
-	return p.getCommonSrv().PushURL(url, common)
+	return p.getCommonSrv().PushURL(url, common, time.Hour)
 }
 
 // CommonURL 推送通用数据自定义URL
-func (p *Push) CommonURL(url string, common *model.Common) error {
+func (p *Push) CommonURL(url string, common *model.Common, timeout time.Duration) error {
 	var neUid string
 	p.o.cfg.View(func(c *config.Config) {
 		neUid = c.OMC.NeUID
@@ -279,7 +286,7 @@ func (p *Push) CommonURL(url string, common *model.Common) error {
 	if common.NeUid == "" {
 		common.NeUid = neUid
 	}
-	return p.getCommonSrv().PushURL(url, common)
+	return p.getCommonSrv().PushURL(url, common, timeout)
 }
 
 // CommonHistoryList 获取通用推送历史
@@ -309,11 +316,11 @@ func (p *Push) UENB(uenb *model.UENB) error {
 	}
 
 	url := p.joinURL(baseURL, service.UENB_PUSH_URI)
-	return p.getUENBSrv().PushURL(url, uenb)
+	return p.getUENBSrv().PushURL(url, uenb, 0)
 }
 
 // UENBURL 推送终端接入基站自定义URL
-func (p *Push) UENBURL(url string, uenb *model.UENB) error {
+func (p *Push) UENBURL(url string, uenb *model.UENB, timeout time.Duration) error {
 	var neUid string
 	p.o.cfg.View(func(c *config.Config) {
 		neUid = c.OMC.NeUID
@@ -321,7 +328,7 @@ func (p *Push) UENBURL(url string, uenb *model.UENB) error {
 	if uenb.NeUid == "" {
 		uenb.NeUid = neUid
 	}
-	return p.getUENBSrv().PushURL(url, uenb)
+	return p.getUENBSrv().PushURL(url, uenb, timeout)
 }
 
 // UENBHistoryList 获取终端接入推送历史
@@ -351,11 +358,11 @@ func (p *Push) NBState(nbState *model.NBState) error {
 	}
 
 	url := p.joinURL(baseURL, service.NB_STATE_PUSH_URI)
-	return p.getNBStateSrv().PushURL(url, nbState)
+	return p.getNBStateSrv().PushURL(url, nbState, 0)
 }
 
 // NBStateURL 推送基站状态自定义URL
-func (p *Push) NBStateURL(url string, nbState *model.NBState) error {
+func (p *Push) NBStateURL(url string, nbState *model.NBState, timeout time.Duration) error {
 	var neUid string
 	p.o.cfg.View(func(c *config.Config) {
 		neUid = c.OMC.NeUID
@@ -363,7 +370,7 @@ func (p *Push) NBStateURL(url string, nbState *model.NBState) error {
 	if nbState.NeUid == "" {
 		nbState.NeUid = neUid
 	}
-	return p.getNBStateSrv().PushURL(url, nbState)
+	return p.getNBStateSrv().PushURL(url, nbState, timeout)
 }
 
 // NBStateHistoryList 获取状态推送历史
@@ -393,11 +400,11 @@ func (p *Push) CDR(cdr *model.CDR) error {
 	}
 
 	url := p.joinURL(baseURL, service.CDR_PUSH_URI)
-	return p.getCDRSrv().PushURL(url, cdr)
+	return p.getCDRSrv().PushURL(url, cdr, 0)
 }
 
 // CDRURL 推送话单自定义URL
-func (p *Push) CDRURL(url string, cdr *model.CDR) error {
+func (p *Push) CDRURL(url string, cdr *model.CDR, timeout time.Duration) error {
 	var neUid string
 	p.o.cfg.View(func(c *config.Config) {
 		neUid = c.OMC.NeUID
@@ -405,7 +412,7 @@ func (p *Push) CDRURL(url string, cdr *model.CDR) error {
 	if cdr.NeUid == "" {
 		cdr.NeUid = neUid
 	}
-	return p.getCDRSrv().PushURL(url, cdr)
+	return p.getCDRSrv().PushURL(url, cdr, timeout)
 }
 
 // CDRHistoryList 获取话单推送历史
@@ -430,12 +437,12 @@ func (p *Push) KPI() error {
 	}
 
 	url := p.joinURL(baseURL, service.KPI_PUSH_URI)
-	return p.getKPISrv().PushURL(url)
+	return p.getKPISrv().PushURL(url, 0)
 }
 
 // KPIURL 推送指标自定义URL
-func (p *Push) KPIURL(url string) error {
-	return p.getKPISrv().PushURL(url)
+func (p *Push) KPIURL(url string, timeout time.Duration) error {
+	return p.getKPISrv().PushURL(url, timeout)
 }
 
 // KPIHistoryList 获取 KPI 推送历史

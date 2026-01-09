@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/tsmask/go-oam/framework/fetch"
+	"github.com/tsmask/go-oam/framework/utils"
 	"github.com/tsmask/go-oam/modules/push/model"
 )
 
@@ -15,7 +16,7 @@ const COMMON_PUSH_URI = "/push/common/receive"
 
 // Common 通用服务
 type Common struct {
-	commonHistorys        sync.Map     // commonHistorys 通用历史记录
+	commonHistorysMap     sync.Map     //  通用历史记录
 	commonHistorysMaxSize atomic.Int32 // 最大历史记录数
 }
 
@@ -24,6 +25,22 @@ func NewCommon() *Common {
 	c := &Common{}
 	c.commonHistorysMaxSize.Store(4096)
 	return c
+}
+
+// getOrCreateRingBuffer 获取或创建指定类型的环形缓冲区
+func (s *Common) getOrCreateRingBuffer(typeStr string) *utils.RingBuffer[model.Common] {
+	if s == nil {
+		return nil
+	}
+
+	if val, ok := s.commonHistorysMap.Load(typeStr); ok {
+		return val.(*utils.RingBuffer[model.Common])
+	}
+
+	maxSize := s.commonHistorysMaxSize.Load()
+	newBuffer := utils.NewRingBuffer[model.Common](int(maxSize))
+	actual, _ := s.commonHistorysMap.LoadOrStore(typeStr, newBuffer)
+	return actual.(*utils.RingBuffer[model.Common])
 }
 
 // HistoryList 线程安全地获取历史列表
@@ -37,83 +54,54 @@ func (s *Common) HistoryList(typeStr string, n int) []model.Common {
 		return []model.Common{}
 	}
 
-	// 获取历史记录
-	history, ok := s.commonHistorys.Load(typeStr)
-	if !ok {
+	rb := s.getOrCreateRingBuffer(typeStr)
+	if rb == nil {
 		return []model.Common{}
 	}
 
-	// 类型断言
-	commonHistorysList, ok := history.([]model.Common)
-	if !ok {
-		return []model.Common{}
+	if n == 0 {
+		return rb.GetAll()
 	}
 
-	// 计算要返回的记录起始索引
-	historyLen := len(commonHistorysList)
-	startIndex := 0
-	// 仅当 n > 0 并且历史记录数大于 n 时才截取
-	if n > 0 && historyLen > n {
-		startIndex = historyLen - n
-	}
-
-	// 只复制需要的部分，避免不必要的内存分配
-	result := make([]model.Common, historyLen-startIndex)
-	copy(result, commonHistorysList[startIndex:])
-	return result
-}
-
-// safeAppendCommonHistory 线程安全地添加历史记录
-func (s *Common) safeAppendCommonHistory(typeStr string, common *model.Common) {
-	if s == nil {
-		return
-	}
-	history, _ := s.commonHistorys.LoadOrStore(typeStr, []model.Common{})
-	commonHistorysList := history.([]model.Common)
-
-	maxSize := s.commonHistorysMaxSize.Load()
-	newHistorys := make([]model.Common, len(commonHistorysList)+1)
-	copy(newHistorys, commonHistorysList)
-	newHistorys[len(newHistorys)-1] = *common
-
-	if len(newHistorys) > int(maxSize) {
-		newHistorys = newHistorys[len(newHistorys)-int(maxSize):]
-	}
-
-	s.commonHistorys.Store(typeStr, newHistorys)
+	return rb.GetLast(n)
 }
 
 // HistorySetSize 安全地修改最大历史记录数量
 // 如果新的最大数量小于当前记录数，会自动清理旧记录
 func (s *Common) HistorySetSize(newSize int) {
-	if s == nil {
+	if s == nil || newSize <= 0 {
 		return
 	}
-	oldSize := s.commonHistorysMaxSize.Swap(int32(newSize))
-	if newSize < int(oldSize) {
-		s.commonHistorys.Range(func(key, value interface{}) bool {
-			if history, ok := value.([]model.Common); ok {
-				if len(history) > newSize {
-					s.commonHistorys.Store(key, history[len(history)-newSize:])
-				}
-			}
-			return true
-		})
-	}
+
+	s.commonHistorysMaxSize.Store(int32(newSize))
+
+	s.commonHistorysMap.Range(func(key, value any) bool {
+		rb := value.(*utils.RingBuffer[model.Common])
+		rb.Resize(newSize)
+		return true
+	})
 }
 
 // PushURL 通用推送 自定义URL地址接收
-func (s *Common) PushURL(url string, common *model.Common) error {
+// timeout: 超时时间，0 或负数表示使用默认值 1 分钟
+func (s *Common) PushURL(url string, common *model.Common, timeout time.Duration) error {
 	if s == nil {
 		return nil
 	}
+
 	common.RecordTime = time.Now().UnixMilli()
 
 	// 记录历史
-	s.safeAppendCommonHistory(common.Type, common)
+	rb := s.getOrCreateRingBuffer(common.Type)
+	if rb != nil {
+		rb.Push(*common)
+	}
 
 	// 发送
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	if timeout <= 0 {
+		timeout = 1 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	return fetch.AsyncPush(ctx, url, common)
 }

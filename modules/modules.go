@@ -36,12 +36,11 @@ func RunServer(cfg *config.Config, router *gin.Engine) error {
 			keyFile := v.Key
 			// 启动HTTPS服务
 			wg.Add(1)
-			go func(addr string, certFile string, keyFile string) {
+			go func(address string, certFile string, keyFile string) {
 				defer wg.Done()
 				for i := range 10 {
-					if err := router.RunTLS(addr, certFile, keyFile); err != nil {
-						log.Printf("[OAM] route run https error, %s\n", err.Error())
-						log.Printf("[OAM] trying to restart HTTPS server on %s (Attempt %d)\n", addr, i)
+					if err := router.RunTLS(address, certFile, keyFile); err != nil {
+						log.Printf("[OAM] route run https on %s (Attempt %d) error, %s\n", address, i, err.Error())
 						// 等待指数退避的时间
 						backoffTime := time.Duration(1<<i) * time.Second // 2^i 秒
 						time.Sleep(backoffTime)
@@ -55,8 +54,7 @@ func RunServer(cfg *config.Config, router *gin.Engine) error {
 				defer wg.Done()
 				for i := range 10 {
 					if err := router.Run(address); err != nil {
-						log.Printf("[OAM] route run http error, %s\n", err.Error())
-						log.Printf("[OAM] trying to restart HTTP server on %s (Attempt %d)\n", address, i)
+						log.Printf("[OAM] route run http on %s (Attempt %d) error, %s\n", address, i, err.Error())
 						// 等待指数退避的时间
 						backoffTime := time.Duration(1<<i) * time.Second // 2^i 秒
 						time.Sleep(backoffTime)

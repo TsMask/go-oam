@@ -67,7 +67,7 @@ func (s CDRController) Test(c *gin.Context) {
 			"releaseTime":  1749697806,
 		},
 	}
-	err := s.srv.PushURL(query.Url, &cdr)
+	err := s.srv.PushURL(query.Url, &cdr, 0)
 	if err != nil {
 		c.JSON(200, resp.ErrMsg(err.Error()))
 		return

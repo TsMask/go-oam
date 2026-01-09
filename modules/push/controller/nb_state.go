@@ -68,7 +68,7 @@ func (s NBStateController) Test(c *gin.Context) {
 		Name:       "TestName",                 // 基站名称 网元标记
 		Position:   "TestPosition",             // 基站位置 网元标记
 	}
-	err := s.srv.PushURL(query.Url, &nbState)
+	err := s.srv.PushURL(query.Url, &nbState, 0)
 	if err != nil {
 		c.JSON(200, resp.ErrMsg(err.Error()))
 		return

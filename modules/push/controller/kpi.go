@@ -53,11 +53,12 @@ func (s KPIController) Test(c *gin.Context) {
 		c.JSON(422, resp.CodeMsg(resp.CODE_PARAM_PARSER, errMsgs))
 		return
 	}
-
-	err := s.srv.Send(query.Url, query.NeUID, 1, map[string]float64{
+	var granularity int64 = 1
+	dataMap := map[string]float64{
 		"Test.01": 10,
 		"Test.02": float64(time.Now().Second()),
-	})
+	}
+	err := s.srv.Send(query.Url, query.NeUID, granularity, dataMap, 0)
 	if err != nil {
 		c.JSON(200, resp.ErrMsg(err.Error()))
 		return

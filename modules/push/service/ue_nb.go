@@ -2,11 +2,11 @@ package service
 
 import (
 	"context"
-	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/tsmask/go-oam/framework/fetch"
+	"github.com/tsmask/go-oam/framework/utils"
 	"github.com/tsmask/go-oam/modules/push/model"
 )
 
@@ -15,15 +15,14 @@ const UENB_PUSH_URI = "/push/ue/nb/receive"
 
 // UENB 终端接入基站服务
 type UENB struct {
-	uenbHistorys        []model.UENB // 终端接入基站历史记录
-	uenbHistorysMux     sync.RWMutex // 保护uenbHistorys的并发访问
-	uenbHistorysMaxSize atomic.Int32 // 最大历史记录数量
+	uenbHistorys        *utils.RingBuffer[model.UENB] // 终端接入基站历史记录（环形缓冲区）
+	uenbHistorysMaxSize atomic.Int32                  // 最大历史记录数量
 }
 
 // NewUENB 创建终端接入基站服务
 func NewUENB() *UENB {
 	u := &UENB{
-		uenbHistorys: []model.UENB{},
+		uenbHistorys: utils.NewRingBuffer[model.UENB](4096),
 	}
 	u.uenbHistorysMaxSize.Store(4096)
 	return u
@@ -35,42 +34,16 @@ func (s *UENB) HistoryList(n int) []model.UENB {
 	if s == nil {
 		return []model.UENB{}
 	}
-	s.uenbHistorysMux.RLock()
-	defer s.uenbHistorysMux.RUnlock()
 
 	if n < 0 {
 		return []model.UENB{}
 	}
 
-	// 计算要返回的记录数量
-	historyLen := len(s.uenbHistorys)
-	startIndex := 0
-
-	// 仅当 n > 0 并且历史记录数大于 n 时才截取
-	if n > 0 && historyLen > n {
-		startIndex = historyLen - n
+	if n == 0 {
+		return s.uenbHistorys.GetAll()
 	}
 
-	// 只复制需要的部分
-	result := make([]model.UENB, historyLen-startIndex)
-	copy(result, s.uenbHistorys[startIndex:])
-	return result
-}
-
-// safeAppendHistory 线程安全地添加终端接入基站历史记录
-func (s *UENB) safeAppendHistory(uenb model.UENB) {
-	if s == nil {
-		return
-	}
-	s.uenbHistorysMux.Lock()
-	defer s.uenbHistorysMux.Unlock()
-
-	maxSize := s.uenbHistorysMaxSize.Load()
-	if len(s.uenbHistorys) >= int(maxSize) {
-		s.uenbHistorys = s.uenbHistorys[1:]
-	}
-
-	s.uenbHistorys = append(s.uenbHistorys, uenb)
+	return s.uenbHistorys.GetLast(n)
 }
 
 // HistorySetSize 安全地修改最大历史记录数量
@@ -80,26 +53,27 @@ func (s *UENB) HistorySetSize(newSize int) {
 		return
 	}
 
-	oldSize := s.uenbHistorysMaxSize.Swap(int32(newSize))
-	if newSize < int(oldSize) {
-		s.uenbHistorysMux.Lock()
-		defer s.uenbHistorysMux.Unlock()
-
-		if len(s.uenbHistorys) > newSize {
-			s.uenbHistorys = s.uenbHistorys[len(s.uenbHistorys)-newSize:]
-		}
-	}
+	s.uenbHistorysMaxSize.Store(int32(newSize))
+	s.uenbHistorys.Resize(newSize)
 }
 
 // PushURL 终端接入基站推送 自定义URL地址接收
-func (s *UENB) PushURL(url string, uenb *model.UENB) error {
+// timeout: 超时时间，0 或负数表示使用默认值 1 分钟
+func (s *UENB) PushURL(url string, uenb *model.UENB, timeout time.Duration) error {
+	if s == nil {
+		return nil
+	}
+
 	uenb.RecordTime = time.Now().UnixMilli()
 
 	// 记录历史
-	s.safeAppendHistory(*uenb)
+	s.uenbHistorys.Push(*uenb)
 
 	// 发送
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	if timeout <= 0 {
+		timeout = 1 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	return fetch.AsyncPush(ctx, url, uenb)
 }

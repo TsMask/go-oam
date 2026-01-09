@@ -74,7 +74,7 @@ func (s AlarmController) Test(c *gin.Context) {
 		AddInfo:           addInfo,                              // 告警辅助信息
 		LocationInfo:      locationInfo,                         // 告警定位信息
 	}
-	err := s.srv.PushURL(query.Url, &alarm)
+	err := s.srv.PushURL(query.Url, &alarm, 1*time.Minute)
 	if err != nil {
 		c.JSON(200, resp.ErrMsg(err.Error()))
 		return

@@ -75,7 +75,7 @@ func (s CommonController) Test(c *gin.Context) {
 			"hax":   generate.String(12),
 		},
 	}
-	err := s.srv.PushURL(query.Url, &common)
+	err := s.srv.PushURL(query.Url, &common, 0)
 	if err != nil {
 		c.JSON(200, resp.ErrMsg(err.Error()))
 		return
