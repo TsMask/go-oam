@@ -16,7 +16,7 @@ type pushJob struct {
 var (
 	pushQueue chan pushJob
 	workerCt  = 2
-	queueSz   = 100
+	queueSz   = 500
 	initOnce  sync.Once
 )
 
