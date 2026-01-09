@@ -32,8 +32,8 @@ type FileUpload struct {
 var baseClient = resty.New().
 	SetRetryCount(2).
 	SetRetryWaitTime(300 * time.Millisecond).
-	SetRetryMaxWaitTime(2 * time.Second).
-	SetTimeout(1 * time.Minute)
+	SetRetryMaxWaitTime(5 * time.Second).
+	SetTimeout(3 * time.Minute)
 
 // -------------------------
 // 构建 Request

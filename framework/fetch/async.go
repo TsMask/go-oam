@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"sync"
-	"time"
 )
 
 type pushJob struct {
@@ -39,9 +38,7 @@ func startWorkers() {
 	for i := 0; i < workerCt; i++ {
 		go func() {
 			for job := range pushQueue {
-				ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-				_, err := Post(job.url, Options{Ctx: ctx, JSON: job.payload})
-				cancel()
+				_, err := Post(job.url, Options{JSON: job.payload})
 				if err != nil {
 					log.Printf("[OAM] push failed url: %s\n%s\n", job.url, err.Error())
 				}
