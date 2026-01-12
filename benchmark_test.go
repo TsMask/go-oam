@@ -57,7 +57,7 @@ func BenchmarkAsyncPushLowConcurrency(b *testing.B) {
 				AlarmTime:   time.Now().UnixMilli(),
 				AlarmId:     fmt.Sprintf("alarm-%d", i),
 				AlarmCode:   1001,
-				AlarmType:   model.ALARM_TYPE_COMMUNICATION_ALARM,
+				AlarmType:   model.ALARM_TYPE_COMMUNICATION,
 				AlarmTitle:  "Test Alarm",
 				AlarmStatus: model.ALARM_STATUS_ACTIVE,
 			}
@@ -82,7 +82,7 @@ func BenchmarkAsyncPushHighConcurrency(b *testing.B) {
 				AlarmTime:   time.Now().UnixMilli(),
 				AlarmId:     fmt.Sprintf("alarm-%d", i),
 				AlarmCode:   1001,
-				AlarmType:   model.ALARM_TYPE_COMMUNICATION_ALARM,
+				AlarmType:   model.ALARM_TYPE_COMMUNICATION,
 				AlarmTitle:  "Test Alarm",
 				AlarmStatus: model.ALARM_STATUS_ACTIVE,
 			}
@@ -102,7 +102,7 @@ func BenchmarkAlarmServiceConcurrentPush(b *testing.B) {
 		AlarmTime:   time.Now().UnixMilli(),
 		AlarmId:     "test-alarm",
 		AlarmCode:   1001,
-		AlarmType:   model.ALARM_TYPE_COMMUNICATION_ALARM,
+		AlarmType:   model.ALARM_TYPE_COMMUNICATION,
 		AlarmTitle:  "Test Alarm",
 		AlarmStatus: model.ALARM_STATUS_ACTIVE,
 	}
@@ -377,7 +377,7 @@ func BenchmarkHistoryListConcurrent(b *testing.B) {
 			AlarmTime:   time.Now().UnixMilli(),
 			AlarmId:     fmt.Sprintf("alarm-%d", i),
 			AlarmCode:   1001,
-			AlarmType:   model.ALARM_TYPE_COMMUNICATION_ALARM,
+			AlarmType:   model.ALARM_TYPE_COMMUNICATION,
 			AlarmTitle:  "Test Alarm",
 			AlarmStatus: model.ALARM_STATUS_ACTIVE,
 		}
@@ -439,7 +439,7 @@ func TestStressTestHighQPS(t *testing.T) {
 					AlarmTime:   time.Now().UnixMilli(),
 					AlarmId:     fmt.Sprintf("alarm-%d-%d", workerID, time.Now().UnixNano()),
 					AlarmCode:   1001,
-					AlarmType:   model.ALARM_TYPE_COMMUNICATION_ALARM,
+					AlarmType:   model.ALARM_TYPE_COMMUNICATION,
 					AlarmTitle:  "Test Alarm",
 					AlarmStatus: model.ALARM_STATUS_ACTIVE,
 				}
@@ -498,7 +498,7 @@ func TestMemoryLeakDetection(t *testing.T) {
 			AlarmTime:   time.Now().UnixMilli(),
 			AlarmId:     fmt.Sprintf("alarm-%d", i),
 			AlarmCode:   1001,
-			AlarmType:   model.ALARM_TYPE_COMMUNICATION_ALARM,
+			AlarmType:   model.ALARM_TYPE_COMMUNICATION,
 			AlarmTitle:  "Test Alarm",
 			AlarmStatus: model.ALARM_STATUS_ACTIVE,
 		}
@@ -515,7 +515,7 @@ func TestMemoryLeakDetection(t *testing.T) {
 			AlarmTime:   time.Now().UnixMilli(),
 			AlarmId:     fmt.Sprintf("alarm-%d", i+10000),
 			AlarmCode:   1001,
-			AlarmType:   model.ALARM_TYPE_COMMUNICATION_ALARM,
+			AlarmType:   model.ALARM_TYPE_COMMUNICATION,
 			AlarmTitle:  "Test Alarm",
 			AlarmStatus: model.ALARM_STATUS_ACTIVE,
 		}
@@ -570,7 +570,7 @@ func TestQueueBackpressure(t *testing.T) {
 					AlarmTime:   time.Now().UnixMilli(),
 					AlarmId:     fmt.Sprintf("alarm-%d-%d", workerID, j),
 					AlarmCode:   1001,
-					AlarmType:   model.ALARM_TYPE_COMMUNICATION_ALARM,
+					AlarmType:   model.ALARM_TYPE_COMMUNICATION,
 					AlarmTitle:  "Test Alarm",
 					AlarmStatus: model.ALARM_STATUS_ACTIVE,
 				}
@@ -644,7 +644,7 @@ func TestLongRunningStability(t *testing.T) {
 					AlarmTime:   time.Now().UnixMilli(),
 					AlarmId:     fmt.Sprintf("alarm-%d-%d", workerID, time.Now().UnixNano()),
 					AlarmCode:   1001,
-					AlarmType:   model.ALARM_TYPE_COMMUNICATION_ALARM,
+					AlarmType:   model.ALARM_TYPE_COMMUNICATION,
 					AlarmTitle:  "Test Alarm",
 					AlarmStatus: model.ALARM_STATUS_ACTIVE,
 				}
@@ -702,7 +702,7 @@ func TestConnectionPoolStress(t *testing.T) {
 					AlarmTime:   time.Now().UnixMilli(),
 					AlarmId:     fmt.Sprintf("alarm-%d-%d", workerID, time.Now().UnixNano()),
 					AlarmCode:   1001,
-					AlarmType:   model.ALARM_TYPE_COMMUNICATION_ALARM,
+					AlarmType:   model.ALARM_TYPE_COMMUNICATION,
 					AlarmTitle:  "Test Alarm",
 					AlarmStatus: model.ALARM_STATUS_ACTIVE,
 				}
@@ -748,7 +748,7 @@ func TestLockContention(t *testing.T) {
 			AlarmTime:   time.Now().UnixMilli(),
 			AlarmId:     fmt.Sprintf("alarm-%d", i),
 			AlarmCode:   1001,
-			AlarmType:   model.ALARM_TYPE_COMMUNICATION_ALARM,
+			AlarmType:   model.ALARM_TYPE_COMMUNICATION,
 			AlarmTitle:  "Test Alarm",
 			AlarmStatus: model.ALARM_STATUS_ACTIVE,
 		}

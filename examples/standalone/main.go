@@ -56,16 +56,16 @@ func main() {
 			// 发告警
 			alarmId := fmt.Sprintf("100_%d", t.UnixMilli())
 			alarm := oam.Alarm{
-				AlarmId:           alarmId,                            // 告警ID
-				AlarmCode:         100,                                // 告警状态码
-				AlarmType:         oam.ALARM_TYPE_COMMUNICATION_ALARM, // 告警类型
-				AlarmTitle:        "Alarm Test",                       // 告警标题
-				PerceivedSeverity: oam.ALARM_SEVERITY_MAJOR,           // 告警级别
-				AlarmStatus:       oam.ALARM_STATUS_ACTIVE,            // 告警状态
-				SpecificProblem:   "Alarm Test",                       // 告警问题原因
-				SpecificProblemID: "100",                              // 告警问题原因ID
-				AddInfo:           "addInfo",                          // 告警辅助信息
-				LocationInfo:      "locationInfo",                     // 告警定位信息
+				AlarmId:           alarmId,                      // 告警ID
+				AlarmCode:         100,                          // 告警状态码
+				AlarmType:         oam.ALARM_TYPE_COMMUNICATION, // 告警类型
+				AlarmTitle:        "Alarm Test",                 // 告警标题
+				PerceivedSeverity: oam.ALARM_SEVERITY_MAJOR,     // 告警级别
+				AlarmStatus:       oam.ALARM_STATUS_ACTIVE,      // 告警状态
+				SpecificProblem:   "Alarm Test",                 // 告警问题原因
+				SpecificProblemID: "100",                        // 告警问题原因ID
+				AddInfo:           "addInfo",                    // 告警辅助信息
+				LocationInfo:      "locationInfo",               // 告警定位信息
 			}
 			errs := o.Push.Alarm(&alarm)
 			if errs != nil {

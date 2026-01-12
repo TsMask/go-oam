@@ -62,17 +62,17 @@ func (s AlarmController) Test(c *gin.Context) {
 	addInfo := fmt.Sprintf("ClientIP: %s", c.ClientIP())
 	locationInfo := fmt.Sprintf("Client UserAgent: %s", c.Request.UserAgent())
 	alarm := model.Alarm{
-		NeUid:             query.NeUID,                          // 网元唯一标识
-		AlarmId:           alarmId,                              // 告警ID
-		AlarmCode:         100,                                  // 告警状态码
-		AlarmType:         model.ALARM_TYPE_COMMUNICATION_ALARM, // 告警类型 CommunicationAlarm,EquipmentAlarm,ProcessingFailure,EnvironmentalAlarm,QualityOfServiceAlarm
-		AlarmTitle:        "Alarm Test",                         // 告警标题
-		PerceivedSeverity: model.ALARM_SEVERITY_EVENT,           // 告警级别 Critical,Major,Minor,Warning,Event
-		AlarmStatus:       model.ALARM_STATUS_CLEAR,             // 告警状态 Clear,Active
-		SpecificProblem:   "Alarm Test",                         // 告警问题原因
-		SpecificProblemID: "100",                                // 告警问题原因ID
-		AddInfo:           addInfo,                              // 告警辅助信息
-		LocationInfo:      locationInfo,                         // 告警定位信息
+		NeUid:             query.NeUID,                    // 网元唯一标识
+		AlarmId:           alarmId,                        // 告警ID
+		AlarmCode:         100,                            // 告警状态码
+		AlarmType:         model.ALARM_TYPE_COMMUNICATION, // 告警类型
+		AlarmTitle:        "Alarm Test",                   // 告警标题
+		PerceivedSeverity: model.ALARM_SEVERITY_EVENT,     // 告警级别 Critical,Major,Minor,Warning,Event
+		AlarmStatus:       model.ALARM_STATUS_CLEAR,       // 告警状态 Clear,Active
+		SpecificProblem:   "Alarm Test",                   // 告警问题原因
+		SpecificProblemID: "100",                          // 告警问题原因ID
+		AddInfo:           addInfo,                        // 告警辅助信息
+		LocationInfo:      locationInfo,                   // 告警定位信息
 	}
 	err := s.srv.PushURL(query.Url, &alarm, 1*time.Minute)
 	if err != nil {
