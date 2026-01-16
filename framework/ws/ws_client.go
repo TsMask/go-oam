@@ -30,7 +30,10 @@ func (c *ClientConn) Connect() error {
 	}
 	wsConn, resp, err := websocket.DefaultDialer.Dial(c.Url, nil)
 	if err != nil {
-		return fmt.Errorf("ws client Connect %s %s err: %s", resp.Proto, resp.Status, err.Error())
+		if resp != nil {
+			return fmt.Errorf("ws client Connect %s %s err: %s", resp.Proto, resp.Status, err.Error())
+		}
+		return fmt.Errorf("ws client Connect err: %s", err.Error())
 	}
 	c.wsConn = wsConn
 	c.lastHeartbeat = time.Now().UnixMilli()

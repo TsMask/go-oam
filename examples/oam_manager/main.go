@@ -7,6 +7,7 @@ import (
 
 	"github.com/tsmask/go-oam"
 	"github.com/tsmask/go-oam/framework/config"
+	"github.com/tsmask/go-oam/modules/ws"
 )
 
 // 网元内已有gin的情况，兼容现有的oam_manager
@@ -26,6 +27,7 @@ func main() {
 		}),
 	)
 	o.SetupCallback(new(oamCallback))
+	o.SetupRoute(ws.SetupRoute)
 	o.RouteEngine(r)
 
 	r.Run(":33030")
