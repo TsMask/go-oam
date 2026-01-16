@@ -4,8 +4,8 @@ package callback
 type CallbackHandler interface {
 	// 备用状态
 	Standby() bool
-	// Redis 实例 *redis.Client
-	Redis() any
+	// Redis 执行命令
+	Redis(args ...any) (any, error)
 	// Telnet 消息处理
 	Telnet(command string) string
 	// SNMP 消息处理
@@ -21,7 +21,7 @@ type CallbackHandler interface {
 // CallbackFuncs 提供基于函数的回调实现，方便按需注入
 type CallbackFuncs struct {
 	OnStandby func() bool
-	OnRedis   func() any
+	OnRedis   func(args ...any) (any, error)
 	OnTelnet  func(command string) string
 	OnSNMP    func(oid, operType string, value any) any
 	OnConfig  func(action, paramName, loc string, paramValue any) error
@@ -35,12 +35,12 @@ func (f *CallbackFuncs) Standby() bool {
 	return false
 }
 
-// Redis 实例 *redis.Client
-func (f *CallbackFuncs) Redis() any {
+// Redis 执行命令
+func (f *CallbackFuncs) Redis(args ...any) (any, error) {
 	if f.OnRedis != nil {
-		return f.OnRedis()
+		return f.OnRedis(args...)
 	}
-	return nil
+	return nil, nil
 }
 
 // Telnet 消息处理

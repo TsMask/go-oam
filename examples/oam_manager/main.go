@@ -42,9 +42,10 @@ func (o *oamCallback) Standby() bool {
 }
 
 // Redis implements callback.CallbackHandler.
-func (o *oamCallback) Redis() any {
+func (o *oamCallback) Redis(args ...any) (any, error) {
 	// *redis.Client
-	return nil
+	// return client.Do(ctx, args...).Result()
+	return nil, nil
 }
 
 // Telnet implements callback.CallbackHandler.

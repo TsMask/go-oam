@@ -1,12 +1,10 @@
 package service
 
 import (
-	"context"
 	"fmt"
 	"reflect"
 	"strings"
 
-	"github.com/redis/go-redis/v9"
 	"github.com/tsmask/go-oam/framework/route/resp"
 	"github.com/tsmask/go-oam/framework/ws"
 	"github.com/tsmask/go-oam/framework/ws/protocol"
@@ -26,15 +24,6 @@ func (s *Redis) Command(handler callback.CallbackHandler, cmd string) (any, erro
 	if handler == nil {
 		return "", fmt.Errorf("callback unrealized")
 	}
-	rdb := handler.Redis()
-	if rdb == nil {
-		return "", fmt.Errorf("redis client not connected")
-	}
-
-	client, ok := rdb.(*redis.Client)
-	if !ok {
-		return "", fmt.Errorf("redis client type error")
-	}
 
 	// 写入命令
 	cmdArr := strings.Fields(cmd)
@@ -46,7 +35,7 @@ func (s *Redis) Command(handler callback.CallbackHandler, cmd string) (any, erro
 	for _, v := range cmdArr {
 		args = append(args, v)
 	}
-	return client.Do(context.Background(), args...).Result()
+	return handler.Redis(args...)
 }
 
 // Session 接收终端交互业务处理

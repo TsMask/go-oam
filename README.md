@@ -87,9 +87,10 @@ func (o *oamCallback) Standby() bool {
 	return false
 }
 // Redis implements callback.CallbackHandler.
-func (o *oamCallback) Redis() any {
+func (o *oamCallback) Redis(ctx context.Context, args ...any) (any, error) {
 	// *redis.Client
-	return nil
+	// return o.rdb.Do(ctx, args...).Result()
+	return nil, nil
 }
 // Telnet implements callback.CallbackHandler.
 func (o *oamCallback) Telnet(command string) string {
