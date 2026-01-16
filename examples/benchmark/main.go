@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -10,7 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/gorilla/websocket"
+	"github.com/tsmask/go-oam/framework/ws"
 	"github.com/tsmask/go-oam/framework/ws/protocol"
 )
 
@@ -75,13 +74,14 @@ func runClient(id int, wg *sync.WaitGroup, stats *Stats) {
 	defer wg.Done()
 
 	start := time.Now()
-	c, _, err := websocket.DefaultDialer.Dial(*targetURL, nil)
+	client := &ws.ClientConn{Url: *targetURL}
+	err := client.Connect()
 	if err != nil {
 		log.Printf("Client %d connect error: %v", id, err)
 		atomic.AddInt64(&stats.ErrorCount, 1)
 		return
 	}
-	defer c.Close()
+	defer client.Close()
 
 	connectTime := time.Since(start)
 	stats.AddConnectTime(connectTime)
@@ -89,62 +89,46 @@ func runClient(id int, wg *sync.WaitGroup, stats *Stats) {
 	done := make(chan struct{})
 
 	// Receiver loop
-	go func() {
-		defer close(done)
-		for {
-			_, msg, err := c.ReadMessage()
-			if err != nil {
-				return
-			}
+	go client.ReadListen(func(err error) {
+		log.Printf("Client %d read error: %v", id, err)
+		atomic.AddInt64(&stats.ErrorCount, 1)
+		close(done)
+	}, func(_ *ws.ClientConn, messageType int, res *protocol.Response) {
+		// 假设 msg 里的 Msg 字段或者其他字段可以用来关联请求
+		// 这里简单处理，如果服务端返回了 PONG 或者 Echo，我们统计一次接收
+		atomic.AddInt64(&stats.RecvCount, 1)
+	})
 
-			// 解析响应计算延迟
-			var resp protocol.Response
-			if err := json.Unmarshal(msg, &resp); err == nil {
-				// 假设 msg 里的 Msg 字段或者其他字段可以用来关联请求
-				// 这里简单处理，如果服务端返回了 PONG 或者 Echo，我们统计一次接收
-				atomic.AddInt64(&stats.RecvCount, 1)
-
-				// 在这里我们无法精确计算RTT，除非协议支持回传发送时间戳
-				// 现有的 protocol.Response 有 Timestamp 字段，那是服务端的处理时间
-				// 我们可以粗略地用 当前时间 - 某个本地记录的时间，但在高并发下很难匹配
-				// 简单起见，我们假设服务端会把请求里的 Data 原样返回，或者我们只测吞吐量
-			}
-		}
-	}()
+	// 启动写监听
+	go client.WriteListen(func(err error) {
+		log.Printf("Client %d write error: %v", id, err)
+		atomic.AddInt64(&stats.ErrorCount, 1)
+	})
 
 	// Sender loop
 	ticker := time.NewTicker(time.Second / time.Duration(*rate))
 	defer ticker.Stop()
 
 	for i := 0; i < *numMsg; i++ {
-		<-ticker.C
+		select {
+		case <-done:
+			return
+		case <-ticker.C:
+			// 记录发送时间
+			sendStart := time.Now()
 
-		req := protocol.Request{
-			Uuid: fmt.Sprintf("%d-%d", id, i),
-			Type: "benchmark",
-			Data: []byte(fmt.Sprintf("msg-%d", i)),
+			client.SendTextJSON(fmt.Sprintf("%d-%d", id, i), "benchmark", fmt.Sprintf("msg-%d", i))
+			atomic.AddInt64(&stats.SentCount, 1)
+
+			// 这里简单统计一下 Write 的耗时作为一部分延迟指标（非 RTT）
+			// 真正的 RTT 需要收到响应后计算
+			stats.AddLatency(time.Since(sendStart))
 		}
-
-		reqBytes, _ := json.Marshal(req)
-
-		// 记录发送时间
-		sendStart := time.Now()
-
-		if err := c.WriteMessage(websocket.TextMessage, reqBytes); err != nil {
-			log.Printf("Client %d write error: %v", id, err)
-			atomic.AddInt64(&stats.ErrorCount, 1)
-			break
-		}
-		atomic.AddInt64(&stats.SentCount, 1)
-
-		// 这里简单统计一下 Write 的耗时作为一部分延迟指标（非 RTT）
-		// 真正的 RTT 需要收到响应后计算
-		stats.AddLatency(time.Since(sendStart))
 	}
 
 	// 给一点时间接收最后的响应
 	time.Sleep(1 * time.Second)
-	c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+	client.Close()
 }
 
 func printReport(s *Stats, totalDuration time.Duration) {
