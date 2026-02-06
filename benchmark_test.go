@@ -255,9 +255,11 @@ func BenchmarkUENBServiceConcurrentPush(b *testing.B) {
 				NeUid:      "test-ne",
 				RecordTime: time.Now().UnixMilli(),
 				NBId:       "test-nb-id",
+				NBIp:       "127.0.0.1",
 				CellId:     "test-cell-id",
 				TAC:        "test-tac",
 				IMSI:       fmt.Sprintf("test-imsi-%d", i),
+				MSISDN:     fmt.Sprintf("test-msisdn-%d", i),
 				Type:       uenbTypes[i%len(uenbTypes)],
 				Result:     uenbResults[i%len(uenbResults)],
 			}
@@ -274,6 +276,12 @@ func BenchmarkUENBHistoryListConcurrent(b *testing.B) {
 	for i := 0; i < 1000; i++ {
 		uenb := &model.UENB{
 			NeUid:  "test-ne",
+			NBId:   "test-nb-id",
+			NBIp:   "127.0.0.1",
+			CellId: "test-cell-id",
+			TAC:    "test-tac",
+			IMSI:   fmt.Sprintf("test-imsi-%d", i),
+			MSISDN: fmt.Sprintf("test-msisdn-%d", i),
 			Type:   model.UENB_TYPE_AUTH,
 			Result: model.UENB_RESULT_AUTH_SUCCESS,
 		}

@@ -25,9 +25,11 @@ type UENB struct {
 	NeUid      string `json:"neUid" binding:"required"`      // 网元唯一标识
 	RecordTime int64  `json:"recordTime" binding:"required"` // 记录时间 时间戳毫秒，Push时自动填充
 	NBId       string `json:"nbId"  binding:"required"`      // 基站ID
+	NBIp       string `json:"nbIp"  binding:"required"`      // 基站IP
 	CellId     string `json:"cellId"  binding:"required"`    // 小区ID
 	TAC        string `json:"tac"  binding:"required"`       // TAC
 	IMSI       string `json:"imsi"  binding:"required"`      // IMSI
+	MSISDN     string `json:"msisdn"  binding:"required"`    // MSISDN
 	Result     string `json:"result" binding:"required"`     // 结果值
 	Type       string `json:"type" binding:"required"`       // 终端接入基站类型
 }

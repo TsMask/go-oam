@@ -77,9 +77,11 @@ func main() {
 			// 发终端接入基站
 			uenb := oam.UENB{
 				NBId:   fmt.Sprint(t.Second()),       // 基站ID
+				NBIp:   "127.0.0.1",                  // 基站IP
 				CellId: "1",                          // 小区ID
 				TAC:    "4388",                       // TAC
 				IMSI:   "460991100000000",            // IMSI
+				MSISDN: "8613800138000",              // MSISDN
 				Result: oam.UENB_RESULT_AUTH_SUCCESS, // 结果值
 				Type:   oam.UENB_TYPE_AUTH,           // 终端接入基站类型
 			}

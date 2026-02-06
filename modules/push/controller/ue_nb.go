@@ -61,9 +61,11 @@ func (s UENBController) Test(c *gin.Context) {
 	uenb := model.UENB{
 		NeUid:  query.NeUID,                            // 网元唯一标识
 		NBId:   fmt.Sprint(generate.Number(2)),         // 基站ID
+		NBIp:   "127.0.0.1",                            // 基站IP
 		CellId: "1",                                    // 小区ID
 		TAC:    "4388",                                 // TAC
 		IMSI:   fmt.Sprintf("%d", generate.Number(15)), // IMSI
+		MSISDN: fmt.Sprintf("%d", generate.Number(11)), // MSISDN
 		Result: model.UENB_RESULT_AUTH_SUCCESS,         // 结果值
 		Type:   model.UENB_TYPE_AUTH,                   // 终端接入基站类型
 	}
