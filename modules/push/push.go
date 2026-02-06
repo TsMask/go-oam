@@ -65,6 +65,20 @@ func SetupRouteUENB(router gin.IRouter, srv *service.UENB) error {
 	return nil
 }
 
+// SetupRouteUEIMS 终端接入IMS路由注册
+func SetupRouteUEIMS(router gin.IRouter, srv *service.UEIMS) error {
+	if srv == nil {
+		return fmt.Errorf("UEIMS service is nil")
+	}
+	ueims := controller.NewUEIMSController(srv)
+	ueimsGroup := router.Group("/push/ue/ims")
+	{
+		ueimsGroup.GET("/history", ueims.History)
+		ueimsGroup.GET("/test", ueims.Test)
+	}
+	return nil
+}
+
 // SetupRouteCDR 话单路由注册
 func SetupRouteCDR(router gin.IRouter, srv *service.CDR) error {
 	if srv == nil {

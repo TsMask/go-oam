@@ -20,6 +20,7 @@ type (
 	KPI     = model.KPI
 	NBState = model.NBState
 	UENB    = model.UENB
+	UEIMS   = model.UEIMS
 )
 
 const (
@@ -57,12 +58,20 @@ const (
 	UENB_RESULT_CM_IDLE                                 = model.UENB_RESULT_CM_IDLE
 	UENB_RESULT_CM_INACTIVE                             = model.UENB_RESULT_CM_INACTIVE
 
+	UEIMS_TYPE_REGISTER   = model.UEIMS_TYPE_REGISTER
+	UEIMS_TYPE_PERIODIC   = model.UEIMS_TYPE_PERIODIC
+	UEIMS_TYPE_UNREGISTER = model.UEIMS_TYPE_UNREGISTER
+
+	UEIMS_RESULT_UNKNOWN = model.UEIMS_RESULT_UNKNOWN
+	UEIMS_RESULT_SUCCESS = model.UEIMS_RESULT_SUCCESS
+
 	ALARM_PUSH_URI    = service.ALARM_PUSH_URI
 	CDR_PUSH_URI      = service.CDR_PUSH_URI
 	COMMON_PUSH_URI   = service.COMMON_PUSH_URI
 	KPI_PUSH_URI      = service.KPI_PUSH_URI
 	NB_STATE_PUSH_URI = service.NB_STATE_PUSH_URI
 	UENB_PUSH_URI     = service.UENB_PUSH_URI
+	UEIMS_PUSH_URI    = service.UEIMS_PUSH_URI
 )
 
 // Push 推送功能集
@@ -76,6 +85,7 @@ type Push struct {
 	kpiSrv     *service.KPI
 	nbStateSrv *service.NBState
 	uenbSrv    *service.UENB
+	ueimsSrv   *service.UEIMS
 }
 
 // NewPush 创建推送功能集
@@ -195,6 +205,23 @@ func (p *Push) getUENBSrv() *service.UENB {
 	return p.uenbSrv
 }
 
+// getUEIMSSrv 获取 UEIMS 服务
+func (p *Push) getUEIMSSrv() *service.UEIMS {
+	p.mu.RLock()
+	if p.ueimsSrv != nil {
+		defer p.mu.RUnlock()
+		return p.ueimsSrv
+	}
+	p.mu.RUnlock()
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.ueimsSrv == nil {
+		p.ueimsSrv = service.NewUEIMS()
+	}
+	return p.ueimsSrv
+}
+
 // joinURL 安全拼接 URL
 func (p *Push) joinURL(baseURL, uri string) string {
 	u, err := url.JoinPath(baseURL, uri)
@@ -213,6 +240,7 @@ func (p *Push) SetupRoute(router gin.IRouter) {
 	push.SetupRouteKPI(router, p.getKPISrv())
 	push.SetupRouteNBState(router, p.getNBStateSrv())
 	push.SetupRouteUENB(router, p.getUENBSrv())
+	push.SetupRouteUEIMS(router, p.getUEIMSSrv())
 }
 
 // Alarm 推送告警
@@ -502,4 +530,46 @@ func (p *Push) KPIKeyAdd(key string, v float64) {
 // KPIKeyDel 删除 KPI 键
 func (p *Push) KPIKeyDel(key string) {
 	p.getKPISrv().KeyDel(key)
+}
+
+// UEIMS 推送终端接入IMS
+func (p *Push) UEIMS(ueims *model.UEIMS) error {
+	var baseURL, neUid string
+	p.o.cfg.View(func(c *config.Config) {
+		baseURL = c.OMC.URL
+		neUid = c.OMC.NeUID
+	})
+
+	if baseURL == "" {
+		return fmt.Errorf("OMC URL is empty")
+	}
+
+	if ueims.NeUid == "" {
+		ueims.NeUid = neUid
+	}
+
+	url := p.joinURL(baseURL, service.UEIMS_PUSH_URI)
+	return p.getUEIMSSrv().PushURL(url, ueims, 0)
+}
+
+// UEIMSURL 推送终端接入IMS自定义URL
+func (p *Push) UEIMSURL(url string, ueims *model.UEIMS, timeout time.Duration) error {
+	var neUid string
+	p.o.cfg.View(func(c *config.Config) {
+		neUid = c.OMC.NeUID
+	})
+	if ueims.NeUid == "" {
+		ueims.NeUid = neUid
+	}
+	return p.getUEIMSSrv().PushURL(url, ueims, timeout)
+}
+
+// UEIMSHistoryList 获取终端接入IMS推送历史
+func (p *Push) UEIMSHistoryList(n int) []model.UEIMS {
+	return p.getUEIMSSrv().HistoryList(n)
+}
+
+// UEIMSHistorySetSize 设置终端接入IMS推送历史大小
+func (p *Push) UEIMSHistorySetSize(size int) {
+	p.getUEIMSSrv().HistorySetSize(size)
 }

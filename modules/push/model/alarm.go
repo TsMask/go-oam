@@ -1,11 +1,11 @@
 package model
 
 const (
-	ALARM_TYPE_COMMUNICATION      = "Communication"     // 告警类型-通信警报
-	ALARM_TYPE_EQUIPMENT          = "Equipment"         // 告警类型-设备警报
-	ALARM_TYPE_PROCESSING_FAILURE = "ProcessingFailure" // 告警类型-处理故障
-	ALARM_TYPE_ENVIRONMENTAL      = "Environmental"     // 告警类型-环境警报
-	ALARM_TYPE_QUALITY_OF_SERVICE = "QualityOfService"  // 告警类型-服务质量警报
+	ALARM_TYPE_COMMUNICATION      = "CommunicationAlarm"    // 告警类型-通信警报
+	ALARM_TYPE_EQUIPMENT          = "EquipmentAlarm"        // 告警类型-设备警报
+	ALARM_TYPE_PROCESSING_FAILURE = "ProcessingFailure"     // 告警类型-处理故障
+	ALARM_TYPE_ENVIRONMENTAL      = "EnvironmentalAlarm"    // 告警类型-环境警报
+	ALARM_TYPE_QUALITY_OF_SERVICE = "QualityOfServiceAlarm" // 告警类型-服务质量警报
 )
 
 const (
