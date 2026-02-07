@@ -33,7 +33,6 @@ func (s *State) Info(cfg *config.Config, handler callback.CallbackHandler) model
 	state := model.State{
 		OsInfo:    getUnameStr(),
 		IpAddr:    getIPAddr(),
-		Standby:   s.Standby(handler),
 		DiskSpace: getDiskSpace(),
 	}
 
@@ -44,13 +43,18 @@ func (s *State) Info(cfg *config.Config, handler callback.CallbackHandler) model
 	state.HostName = hostName
 	var pid int32
 
-	cfg.View(func(c *config.Config) {
-		state.Version = c.NE.Version
-		state.SerialNum = c.NE.SerialNum
-		state.ExpiryDate = c.NE.ExpiryDate
-		state.Capability = int64(c.NE.UeNumber)
-		pid = int32(c.NE.Pid)
-	})
+	if cfg != nil {
+		cfg.View(func(c *config.Config) {
+			state.Version = c.NE.Version
+			state.SerialNum = c.NE.SerialNum
+			state.ExpiryDate = c.NE.ExpiryDate
+			state.Capability = int64(c.NE.UeNumber)
+			pid = int32(c.NE.Pid)
+		})
+	}
+	if handler != nil {
+		state.Standby = s.Standby(handler)
+	}
 
 	if pid != 0 {
 		pid = int32(os.Getpid())

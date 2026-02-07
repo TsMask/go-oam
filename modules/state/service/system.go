@@ -34,7 +34,10 @@ func (s *System) Info(cfg *config.Config) map[string]any {
 	// 获取主机运行时间
 	bootTime := time.Since(time.Unix(int64(info.BootTime), 0)).Seconds()
 	// 获取程序运行时间
-	runTime := time.Since(cfg.RunTime()).Abs().Seconds()
+	var runTime int64 = 0
+	if cfg != nil {
+		runTime = int64(time.Since(cfg.RunTime()).Abs().Seconds())
+	}
 	return map[string]any{
 		"platform":        info.Platform,
 		"platformVersion": info.PlatformVersion,
