@@ -156,18 +156,24 @@ func (p *Push) getKPISrv() *service.KPI {
 	if p.kpiSrv == nil {
 		var neUid string
 		var kpiGranularity int
-		var baseURL string
 		p.o.cfg.View(func(c *config.Config) {
 			neUid = c.OMC.NeUID
 			kpiGranularity = c.OMC.KPIGranularity
-			baseURL = c.OMC.URL
 		})
 		p.kpiSrv = service.NewKPI(neUid, time.Duration(kpiGranularity)*time.Second)
 
 		// 如果配置了周期且有基础 URL，则自动启动定时推送
-		if kpiGranularity > 0 && baseURL != "" {
-			url := p.joinURL(baseURL, service.KPI_PUSH_URI)
-			p.kpiSrv.KPITimerStart(url)
+		if kpiGranularity > 0 {
+			p.kpiSrv.KPITimerStart(func() string {
+				var currentBaseURL string
+				p.o.cfg.View(func(c *config.Config) {
+					currentBaseURL = c.OMC.URL
+				})
+				if currentBaseURL == "" {
+					return ""
+				}
+				return p.joinURL(currentBaseURL, service.KPI_PUSH_URI)
+			})
 		}
 	}
 	return p.kpiSrv
@@ -485,15 +491,16 @@ func (p *Push) KPIHistorySetSize(size int) {
 
 // KPITimerStart 开启 KPI 定时推送
 func (p *Push) KPITimerStart() error {
-	var baseURL string
-	p.o.cfg.View(func(c *config.Config) {
-		baseURL = c.OMC.URL
+	p.getKPISrv().KPITimerStart(func() string {
+		var currentBaseURL string
+		p.o.cfg.View(func(c *config.Config) {
+			currentBaseURL = c.OMC.URL
+		})
+		if currentBaseURL == "" {
+			return ""
+		}
+		return p.joinURL(currentBaseURL, service.KPI_PUSH_URI)
 	})
-	if baseURL == "" {
-		return fmt.Errorf("OMC URL is empty")
-	}
-	url := p.joinURL(baseURL, service.KPI_PUSH_URI)
-	p.getKPISrv().KPITimerStart(url)
 	return nil
 }
 

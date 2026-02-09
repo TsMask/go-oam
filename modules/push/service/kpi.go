@@ -40,7 +40,7 @@ func NewKPI(neUid string, granularity time.Duration) *KPI {
 }
 
 // KPITimerStart KPI定时发送
-func (s *KPI) KPITimerStart(url string) {
+func (s *KPI) KPITimerStart(urlGetter func() string) {
 	if s == nil {
 		return
 	}
@@ -63,13 +63,16 @@ func (s *KPI) KPITimerStart(url string) {
 				dataMap := s.safeGetAllData()
 				if len(dataMap) != 0 {
 					granularity := int64(s.Granularity.Seconds())
-					err := s.Send(url, s.NeUid, granularity, dataMap, 0)
-					if err != nil {
-						log.Printf("[OAM] kpi timer send failed NeUid: %s, Granularity: %ds\n%s\n", s.NeUid, granularity, err.Error())
-						fail++
-					} else {
-						fail = 0
-						s.safeClearData()
+					url := urlGetter()
+					if url != "" {
+						err := s.Send(url, s.NeUid, granularity, dataMap, 0)
+						if err != nil {
+							log.Printf("[OAM] kpi timer send failed NeUid: %s, Granularity: %ds\n%s\n", s.NeUid, granularity, err.Error())
+							fail++
+						} else {
+							fail = 0
+							s.safeClearData()
+						}
 					}
 				}
 				delay := s.Granularity
