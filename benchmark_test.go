@@ -244,8 +244,18 @@ func BenchmarkNBStateHistorySetSizeConcurrent(b *testing.B) {
 func BenchmarkUENBServiceConcurrentPush(b *testing.B) {
 	initTestServer()
 	o := New(WithPush())
-	uenbTypes := []string{model.UENB_TYPE_AUTH, model.UENB_TYPE_DETACH, model.UENB_TYPE_CM}
-	uenbResults := []string{model.UENB_RESULT_AUTH_SUCCESS, model.UENB_RESULT_AUTH_NETWORK_FAILURE, model.UENB_RESULT_AUTH_INTERFACE_FAILURE, model.UENB_RESULT_AUTH_MAC_FAILURE, model.UENB_RESULT_AUTH_SYNC_FAILURE, model.UENB_RESULT_AUTH_NON_5G_AUTHENTICATION_NOT_ACCEPTED, model.UENB_RESULT_AUTH_RESPONSE_FAILURE, model.UENB_RESULT_AUTH_UNKNOWN}
+	uenbTypes := []string{model.UENB_TYPE_AUTH, model.UENB_TYPE_DETACH, model.UENB_TYPE_CM, model.UENB_TYPE_ATTACH, model.UENB_TYPE_TAU, model.UENB_TYPE_HANDOVER}
+	uenbResults := []string{
+		model.UENB_RESULT_AUTH_SUCCESS,
+		model.UENB_RESULT_AUTH_NETWORK_FAILURE,
+		model.UENB_RESULT_AUTH_INTERFACE_FAILURE,
+		model.UENB_RESULT_AUTH_MAC_FAILURE,
+		model.UENB_RESULT_AUTH_SYNC_FAILURE,
+		model.UENB_RESULT_AUTH_NON_5G_AUTHENTICATION_NOT_ACCEPTED,
+		model.UENB_RESULT_AUTH_RESPONSE_FAILURE,
+		model.UENB_RESULT_AUTH_UNKNOWN,
+		model.UENB_RESULT_AUTH_ILLEGAL,
+	}
 
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
