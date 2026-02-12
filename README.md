@@ -142,18 +142,13 @@ go-oam
 ├── modules                               目录-模块
 │   ├── callback                          目录-回调处理
 │   ├── common                            目录-通用模块
+│   ├── pull                              目录-拉取模块
 │   ├── push                              目录-推送模块
 │   ├── state                             目录-状态模块
 │   ├── tool                              目录-工具模块
 │   ├── ws                                目录-WS模块
 │   └── modules.go                        文件-加载模块
-├── oam_pull_omc.go                       文件-下发函数OMC
-├── oam_push_alarm.go                     文件-推送函数告警
-├── oam_push_cdr.go                       文件-推送函数话单
-├── oam_push_common.go                    文件-推送函数通用
-├── oam_push_kpi.go                       文件-推送函数KPI
-├── oam_push_nb_state.go                  文件-推送函数基站状态
-├── oam_push_ue_nb.go                     文件-推送函数UENB
+├── oam_push.go                           文件-推送函数
 ├── oam.go                                文件-库函数
 ├── LICENSE                               文件-许可证
 └──  README.md                            文件-项目说明
@@ -167,4 +162,6 @@ protoc --go_out=. --go-grpc_out=. framework/ws/protocol/ws.proto
 # go get google.golang.org/protobuf@v1.36.9
 # go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.10
 
+# 本地调试替换
+replace github.com/tsmask/go-oam v1.1.2 => C:\go-oam
 ```
