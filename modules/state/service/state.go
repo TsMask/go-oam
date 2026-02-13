@@ -56,7 +56,7 @@ func (s *State) Info(cfg *config.Config, handler callback.CallbackHandler) model
 		state.Standby = s.Standby(handler)
 	}
 
-	if pid != 0 {
+	if pid <= 0 {
 		pid = int32(os.Getpid())
 	}
 	memUsage, cpuUsage := getMemAndCPUUsage(pid)
