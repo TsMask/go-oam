@@ -48,6 +48,7 @@ type NEConfig struct {
 	ExpiryDate string `yaml:"expiryDate" json:"expiryDate"` // 有效日期 格式：YYYY-MM-DD
 	NbNumber   int    `yaml:"nbNumber" json:"nbNumber"`     // 基站限制数量 AMF MME
 	UeNumber   int    `yaml:"ueNumber" json:"ueNumber"`     // 终端限制数量 UDM
+	Model      string `yaml:"model" json:"model"`           // 模式 2345G
 	Pid        int    `yaml:"pid" json:"pid"`               // 进程ID 外部程序运行时需要填，不填默认当前
 }
 

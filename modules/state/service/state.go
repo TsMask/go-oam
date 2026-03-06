@@ -34,6 +34,7 @@ func (s *State) Info(cfg *config.Config, handler callback.CallbackHandler) model
 		OsInfo:    getUnameStr(),
 		IpAddr:    getIPAddr(),
 		DiskSpace: getDiskSpace(),
+		BootTime:  cfg.RunTime().UnixMilli(),
 	}
 
 	hostName, err := os.Hostname()
@@ -49,6 +50,7 @@ func (s *State) Info(cfg *config.Config, handler callback.CallbackHandler) model
 			state.SerialNum = c.NE.SerialNum
 			state.ExpiryDate = c.NE.ExpiryDate
 			state.Capability = int64(c.NE.UeNumber)
+			state.Model = c.NE.Model
 			pid = int32(c.NE.Pid)
 		})
 	}

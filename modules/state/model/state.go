@@ -12,6 +12,8 @@ type State struct {
 	ExpiryDate string `json:"expiryDate"` // 到期时间 YYYY-MM-DD
 	Capability int64  `json:"capability"` // UE数量
 	Standby    bool   `json:"standby"`    // 是否备用模式
+	Model      string `json:"model"`      // 模式 2345G
+	BootTime   int64  `json:"bootTime"`   // 启动时间 毫秒时间戳
 
 	CpuUsage  CpuUsage  `json:"cpuUsage"`
 	MemUsage  MemUsage  `json:"memUsage"`
