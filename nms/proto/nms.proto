@@ -1,0 +1,198 @@
+syntax = "proto3";
+
+package nms;
+
+option go_package = "github.com/tsmask/go-oam/nms/proto;pb";
+
+// ============================================
+// NMS 服务端 API（NE 客户端调用）
+// ============================================
+
+service NMSService {
+  // 连接管理
+  rpc Connect(ConnectRequest) returns (ConnectResponse);
+  rpc Disconnect(DisconnectRequest) returns (DisconnectResponse);
+  rpc Heartbeat(stream HeartbeatRequest) returns (stream HeartbeatResponse);
+
+  // 配置管理
+  rpc PushConfig(ConfigRequest) returns (ConfigResponse);
+  rpc GetConfig(GetConfigRequest) returns (ConfigResponse);
+  rpc SyncConfig(SyncConfigRequest) returns (SyncConfigResponse);
+
+  // 性能管理（流式上报）
+  rpc ReportMetrics(stream MetricsRequest) returns (stream MetricsResponse);
+
+  // 告警管理（流式上报）
+  rpc ReportAlarms(stream AlarmRequest) returns (stream AlarmResponse);
+
+  // 命令控制
+  rpc ExecuteCommand(CommandRequest) returns (CommandResponse);
+  rpc BatchExecuteCommand(BatchCommandRequest) returns (stream CommandResponse);
+}
+
+// ============================================
+// 连接管理
+// ============================================
+
+message ConnectRequest {
+  string ne_id = 1;
+  string ne_type = 2;
+  string ip = 3;
+  int32 port = 4;
+  map<string, string> attrs = 5;
+  map<string, string> capabilities = 6;
+}
+
+message ConnectResponse {
+  int32 code = 1;
+  string message = 2;
+  string session_id = 3;
+  int64 server_time = 4;
+}
+
+message DisconnectRequest {
+  string ne_id = 1;
+  string session_id = 2;
+  string reason = 3;
+}
+
+message DisconnectResponse {
+  int32 code = 1;
+  string message = 2;
+}
+
+message HeartbeatRequest {
+  string ne_id = 1;
+  string session_id = 2;
+  int64 timestamp = 3;
+  map<string, string> status = 4;
+}
+
+message HeartbeatResponse {
+  int64 timestamp = 1;
+  bool ack = 2;
+  string message = 3;
+}
+
+// ============================================
+// 配置管理
+// ============================================
+
+message ConfigRequest {
+  string ne_id = 1;
+  string session_id = 2;
+  string config_type = 3;
+  bytes config_data = 4;
+  int32 version = 5;
+}
+
+message ConfigResponse {
+  int32 code = 1;
+  string message = 2;
+  string config_id = 3;
+  int64 apply_time = 4;
+}
+
+message GetConfigRequest {
+  string ne_id = 1;
+  string session_id = 2;
+  string config_type = 3;
+}
+
+message SyncConfigRequest {
+  string ne_id = 1;
+  string session_id = 2;
+  string config_type = 3;
+  string target_version = 4;
+}
+
+message SyncConfigResponse {
+  int32 code = 1;
+  string message = 2;
+  bytes config_data = 3;
+  string current_version = 4;
+}
+
+// ============================================
+// 性能管理
+// ============================================
+
+message MetricsRequest {
+  string ne_id = 1;
+  string session_id = 2;
+  string metrics_type = 3;
+  int64 timestamp = 4;
+  repeated MetricItem metrics = 5;
+}
+
+message MetricItem {
+  string name = 1;
+  string value = 2;
+  string unit = 3;
+  map<string, string> labels = 4;
+}
+
+message MetricsResponse {
+  string ne_id = 1;
+  bool ack = 2;
+  string message = 3;
+}
+
+// ============================================
+// 告警管理
+// ============================================
+
+message AlarmRequest {
+  string ne_id = 1;
+  string session_id = 2;
+  Alarm alarm = 3;
+}
+
+message Alarm {
+  string alarm_id = 1;
+  string alarm_type = 2;
+  string severity = 3;
+  string name = 4;
+  string description = 5;
+  string source = 6;
+  int64 start_time = 7;
+  int64 end_time = 8;
+  map<string, string> params = 9;
+}
+
+message AlarmResponse {
+  string ne_id = 1;
+  string alarm_id = 2;
+  bool ack = 3;
+  string message = 4;
+}
+
+// ============================================
+// 命令控制
+// ============================================
+
+message CommandRequest {
+  string ne_id = 1;
+  string session_id = 2;
+  string command = 3;
+  string command_type = 4;
+  int32 timeout = 5;
+  map<string, string> params = 6;
+}
+
+message CommandResponse {
+  int32 code = 1;
+  string message = 2;
+  string result = 3;
+  int64 exec_time = 4;
+  string ne_id = 5;
+}
+
+message BatchCommandRequest {
+  repeated string ne_ids = 1;
+  string session_id = 2;
+  string command = 3;
+  string command_type = 4;
+  int32 timeout = 5;
+  map<string, string> params = 6;
+}
