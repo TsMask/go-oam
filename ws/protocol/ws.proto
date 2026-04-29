@@ -1,0 +1,77 @@
+syntax = "proto3";
+
+package protocol;
+
+option go_package = "github.com/tsmask/go-oam/ws/protocol";
+
+// Request 请求消息
+// 客户端发送到服务端的请求
+message Request {
+  // 请求唯一标识符
+  // 用途：用于请求-响应匹配，日志追踪、调试
+  // 说明：客户端生成，服务端原样返回
+  // 示例："req-20240101-001"
+  string id = 1;
+
+  // 动作类型
+  // 用途：路由到不同的处理器，表示要执行的动作
+  // 说明：对应 types.Request.Action 字段
+  // 示例：
+  //   - "echo" : 回显消息
+  //   - "chat" : 聊天消息
+  //   - "subscribe" : 订阅请求
+  string action = 2;
+
+  // 业务数据
+  // 用途：携带业务逻辑数据
+  // 编码：由codec决定（JSON/MsgPack/Protobuf等）
+  // 示例：
+  //   JSON : {"content": "hello"}
+  //   MsgPack : 0x81 ...
+  bytes data = 3;
+}
+
+// Response 响应消息
+// 服务端返回给客户端的响应
+message Response {
+  // 请求标识符
+  // 用途：与Request.id对应，用于匹配请求
+  // 说明：原样返回Request.id
+  string id = 1;
+
+  // 响应时间戳
+  // 用途：服务端处理完成时间，用于计算延迟
+  // 格式：Unix时间戳（毫秒）
+  // 示例：1704067200000 (2024-01-01 00:00:00 UTC)
+  int64 ts = 2;
+
+  // 动作类型
+  // 用途：标识响应消息的动作类型，用于路由和分类
+  // 说明：对应 types.Response.Action 字段
+  // 示例：
+  //   - "broadcast" : 广播消息
+  //   - "notification" : 通知消息
+  string action = 3;
+
+  // 响应状态码
+  // 用途：表示处理结果
+  // 值：
+  //   0     : 成功
+  //   200   : 成功（兼容HTTP）
+  //   4xx   : 客户端错误（如参数错误、权限不足）
+  //   5xx   : 服务端错误（如内部错误、服务不可用）
+  // 说明：与HTTP状态码语义一致
+  int32 code = 4;
+
+  // 错误消息
+  // 用途：当code != 0时的错误描述
+  // 内容：人类可读的错误信息，用于调试
+  // 示例："invalid parameters", "permission denied"
+  string msg = 5;
+
+  // 响应数据
+  // 用途：携带业务响应数据
+  // 编码：与Request.data一致
+  // 说明：成功时包含业务数据，失败时可能为空
+  bytes data = 6;
+}
