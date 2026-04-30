@@ -67,7 +67,6 @@ func uni() {
 		push.WithBaseURL(baseURL),
 		push.WithTimeout(30*time.Second),
 		push.WithRetry(3),
-		push.WithHistoryMaxSize(1024),
 	)
 
 	log.Printf("Push 服务已启动，推送地址: %s\n", baseURL)
@@ -112,21 +111,6 @@ func uni() {
 	}
 
 	time.Sleep(500 * time.Millisecond)
-
-	alarms := p.HistoryList("alarm", 10)
-	fmt.Printf("\n历史告警记录 (%d 条):\n", len(alarms))
-	for i, r := range alarms {
-		fmt.Printf("  [%d] Type=%s NeUid=%s\n", i+1, r.RecordType, r.NeUID)
-	}
-
-	cdrs := p.HistoryList("cdr", 10)
-	fmt.Printf("\n历史 CDR 记录 (%d 条):\n", len(cdrs))
-	for i, r := range cdrs {
-		fmt.Printf("  [%d] Type=%s NeUid=%s\n", i+1, r.RecordType, r.NeUID)
-	}
-
-	types := p.HistoryTypes()
-	fmt.Printf("\n所有历史类型: %v\n", types)
 
 	p.Close()
 	log.Printf("Push 服务已关闭")
