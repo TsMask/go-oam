@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package grpc;
+
+option go_package = "github.com/tsmask/go-oam/grpc/protobuf";
+
+// 统一消息类型
+message Message {
+  // 请求唯一标识符
+  string id = 1;
+
+  // 动作类型
+  string action = 2;
+
+  // 业务数据
+  bytes data = 3;
+
+  // 状态码：0=请求, 200=成功, 4xx=客户端错误, 5xx=服务端错误
+  int32 code = 4;
+
+  // 错误消息
+  string msg = 5;
+
+  // 时间戳
+  int64 ts = 6;
+}
+
+// 双向流服务
+service Service {
+  rpc Stream(stream Message) returns (stream Message);
+}
