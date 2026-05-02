@@ -10,8 +10,6 @@ import (
 	"time"
 
 	ws "github.com/tsmask/go-oam/ws"
-	"github.com/tsmask/go-oam/ws/codec"
-	"github.com/tsmask/go-oam/ws/types"
 )
 
 func main() {
@@ -36,58 +34,60 @@ func main() {
 		log.Fatal(http.ListenAndServe(":"+port, nil))
 	}()
 
-	server := ws.NewServer(":9092", codec.NewJSONCodec(),
+	server := ws.NewServer(ws.NewJSONCodec(),
 		ws.WithServerMaxConns(100000),
 		ws.WithServerWorkerPoolSize(32),
-		ws.WithServerHeartbeatInterval(30*time.Second),
-		ws.WithServerHeartbeatTimeout(60*time.Second),
+		ws.WithServerHeartbeat(30*time.Second, 60*time.Second),
 		ws.WithServerRateLimit(100000),
 	)
 
-	server.Handle("echo", func(conn *ws.Conn, req *types.Request) {
-		conn.SendResp(&types.Response{
+	server.Handle("echo", func(conn *ws.Conn, req *ws.Request) {
+		conn.SendResp(&ws.Response{
 			Code: 0,
 			Data: req.Data,
 		})
 	})
 
-	server.Handle("ping", func(conn *ws.Conn, req *types.Request) {
-		conn.SendResp(&types.Response{
+	server.Handle("ping", func(conn *ws.Conn, req *ws.Request) {
+		conn.SendResp(&ws.Response{
 			Code: 0,
 			Msg:  "pong",
 			Data: []byte(`{"status":"ok"}`),
 		})
 	})
 
-	server.Handle("info", func(conn *ws.Conn, req *types.Request) {
-		conn.SendResp(&types.Response{
+	server.Handle("info", func(conn *ws.Conn, req *ws.Request) {
+		conn.SendResp(&ws.Response{
 			Code: 0,
 			Msg:  "success",
 			Data: []byte(fmt.Sprintf(`{"id":"%s","connections":%d}`, conn.ID, server.ConnManager().Count())),
 		})
 	})
 
-	server.OnConnect = func(conn *ws.Conn) {
+	server.OnConnect(func(conn *ws.Conn) {
 		log.Printf("客户端连接: %s", conn.ID)
-	}
-	server.OnDisconnect = func(conn *ws.Conn) {
+	})
+	server.OnDisconnect(func(conn *ws.Conn) {
 		log.Printf("客户端断开: %s", conn.ID)
-	}
+	})
 
 	metrics := server.Metrics()
 	log.Printf("服务端指标: %+v", metrics)
+
+	mux := http.NewServeMux()
+	mux.Handle("/ws", server)
 
 	go func() {
 		sig := make(chan os.Signal, 1)
 		signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 		<-sig
 		log.Println("收到信号，关闭中...")
-		server.Stop()
+		os.Exit(0)
 	}()
 
 	fmt.Println("🔌 WebSocket 服务端启动 :9092")
 	fmt.Println("📊 支持的消息类型: echo, ping, info")
 	fmt.Println()
 	log.Printf("服务端启动 :9092")
-	log.Fatal(server.Start())
+	log.Fatal(http.ListenAndServe(":9092", mux))
 }

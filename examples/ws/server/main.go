@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"net/http"
 	"time"
 
 	ws "github.com/tsmask/go-oam/ws"
@@ -31,12 +32,11 @@ func authMiddleware(next ws.Handler) ws.Handler {
 
 func main() {
 	// 创建服务端
-	server := ws.NewServer(":9092",
+	server := ws.NewServer(
 		ws.NewJSONCodec(),
 		ws.WithServerMaxConns(100000),
 		ws.WithServerWorkerPoolSize(32),
-		ws.WithServerHeartbeatInterval(30*time.Second),
-		ws.WithServerHeartbeatTimeout(60*time.Second),
+		ws.WithServerHeartbeat(30*time.Second, 60*time.Second),
 		ws.WithServerRateLimit(100000),
 	)
 
@@ -57,19 +57,21 @@ func main() {
 		conn.SendError(req.ID, req.Action, 0, "pong")
 	})
 
-	// 连接回调
-	server.OnConnect = func(conn *ws.Conn) {
+	server.OnConnect(func(conn *ws.Conn) {
 		log.Printf("客户端连接: %s", conn.ID)
-	}
-	server.OnDisconnect = func(conn *ws.Conn) {
+	})
+	server.OnDisconnect(func(conn *ws.Conn) {
 		log.Printf("客户端断开: %s", conn.ID)
-	}
+	})
 
 	// 性能指标
 	metrics := server.Metrics()
 	log.Printf("服务端指标: %+v", metrics)
 
 	// 启动服务端
+	mux := http.NewServeMux()
+	mux.Handle("/ws", server)
+
 	log.Printf("服务端启动 :9092")
-	log.Fatal(server.Start())
+	log.Fatal(http.ListenAndServe(":9092", mux))
 }

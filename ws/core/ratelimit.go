@@ -69,3 +69,28 @@ func (r *AtomicRateLimiter) Tokens() float64 {
 	}
 	return tokens
 }
+
+// Rate 获取限流速率（每秒令牌数）
+func (r *AtomicRateLimiter) Rate() float64 {
+	return r.rate
+}
+
+// Burst 获取令牌桶容量
+func (r *AtomicRateLimiter) Burst() int32 {
+	return r.burst
+}
+
+// IsLimited 检查当前是否处于限流状态（令牌数 < 1）
+func (r *AtomicRateLimiter) IsLimited() bool {
+	return r.Tokens() < 1
+}
+
+// WaitTime 估算需要等待多久才能获得一个令牌
+func (r *AtomicRateLimiter) WaitTime() time.Duration {
+	tokens := r.Tokens()
+	if tokens >= 1 {
+		return 0
+	}
+	deficit := 1 - tokens
+	return time.Duration(deficit/r.rate) * time.Second
+}

@@ -72,5 +72,8 @@ func (p *Pool) Put(buf []byte) {
 	case 512:
 		b := &buffer{data: buf[:0]}
 		p.medium.Put(b)
+	case 2048:
+		b := &buffer{data: buf[:0]}
+		p.large.Put(b)
 	}
 }

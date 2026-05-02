@@ -42,10 +42,6 @@ func NewBatchScheduler(size int, timeout time.Duration, flushFn func([][]byte)) 
 // 参数：data 二进制数据
 // 返回：成功返回true，队列已关闭返回false
 func (b *BatchScheduler) Submit(data []byte) bool {
-	if b.closed.Load() {
-		return false
-	}
-
 	b.mu.Lock()
 	defer b.mu.Unlock()
 

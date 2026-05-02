@@ -4,7 +4,7 @@ import (
 	"github.com/tsmask/go-oam/ws/types"
 )
 
-// Request 请求消息
+// Request 请求消息（从 types 包 re-export）
 // 客户端发送到服务端的请求结构
 //
 // 字段说明：
@@ -13,7 +13,7 @@ import (
 //   - Data: 业务数据，编码格式由 codec 决定
 type Request = types.Request
 
-// Response 响应消息
+// Response 响应消息（从 types 包 re-export）
 // 服务端返回给客户端的响应结构
 //
 // 字段说明：
