@@ -1,4 +1,3 @@
-// Package main provides usage examples and best practices for Push SDK.
 package main
 
 import (
@@ -28,7 +27,7 @@ func ExampleBasicUsage() {
 			RecordType: "metrics",
 			RecordData: data,
 		}
-		if err := p.Send(record); err != nil {
+		if err := p.Send(record, nil); err != nil {
 			log.Printf("Push failed: %v", err)
 		}
 	})
@@ -54,7 +53,7 @@ func ExampleAsyncPush() {
 			RecordData: map[string]any{"level": i % 10},
 		}
 
-		if err := p.SendAsync(record); err != nil {
+		if err := p.SendAsync(record, nil); err != nil {
 			log.Printf("Async push failed: %v", err)
 		}
 	}
@@ -105,7 +104,7 @@ func ExampleHighConcurrency() {
 			NeUID:      fmt.Sprintf("ne-%d", i%10),
 			RecordType: "kpi",
 			RecordData: map[string]any{"value": i},
-		})
+		}, nil)
 	}
 	fmt.Printf("Batch insert 1000 records\n")
 	fmt.Println("High concurrency example completed")

@@ -30,7 +30,7 @@ func periodic() {
 			RecordType: "kpi",
 			RecordData: data,
 		}
-		if err := p.Send(record); err != nil {
+		if err := p.Send(record, nil); err != nil {
 			log.Printf("Send failed: %v", err)
 		}
 	})
@@ -44,7 +44,7 @@ func periodic() {
 				RecordType: "alarm",
 				RecordData: data,
 			}
-			p.Send(record)
+			p.Send(record, nil)
 		}
 	})
 
@@ -81,7 +81,7 @@ func uni() {
 	}
 
 	log.Printf("发送告警推送...")
-	if err := p.Send(alarmRecord); err != nil {
+	if err := p.Send(alarmRecord, nil); err != nil {
 		log.Printf("推送失败: %v", err)
 	} else {
 		log.Printf("推送成功")
@@ -97,14 +97,14 @@ func uni() {
 	}
 
 	log.Printf("发送 CDR 推送...")
-	if err := p.SendAsync(cdrRecord); err != nil {
+	if err := p.SendAsync(cdrRecord, nil); err != nil {
 		log.Printf("推送失败: %v", err)
 	} else {
 		log.Printf("推送成功")
 	}
 
 	log.Printf("发送异步告警推送...")
-	if err := p.SendAsyncURL(baseURL+"/api/alarm", alarmRecord); err != nil {
+	if err := p.SendAsync(alarmRecord, &push.SendParams{URL: baseURL + "/api/alarm"}); err != nil {
 		log.Printf("异步推送失败: %v", err)
 	} else {
 		log.Printf("异步推送成功")

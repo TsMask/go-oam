@@ -36,6 +36,26 @@ type Record struct {
 	RecordData any    `json:"record_data,omitempty"` // Record data payload
 }
 
+// SendParams defines parameters for Send and SendAsync operations.
+//
+// Timeout interpretation: timeout <= 0 uses client's default timeout.
+// URL interpretation: empty URL uses the default push URL.
+//
+// Example:
+//
+//	params := &push.SendParams{
+//	    URL:     "https://custom-api.com/hook",
+//	    Timeout: 5 * time.Second,
+//	}
+//	p.Send(record, params)
+type SendParams struct {
+	// URL is the destination endpoint. If empty, uses the default push URL.
+	URL string
+
+	// Timeout specifies the request timeout. If <= 0, uses the client's default timeout.
+	Timeout time.Duration
+}
+
 // Push is the core client for sending data records to push endpoints.
 //
 // It manages HTTP client connections, retry logic, and provides both synchronous
@@ -55,7 +75,7 @@ type Record struct {
 //	    RecordType: "alarm",
 //	    RecordData: map[string]any{"level": "critical"},
 //	}
-//	p.Send(record)
+//	p.Send(record, nil)
 type Push struct {
 	baseURL string
 	pushURI string
@@ -174,11 +194,14 @@ func (p *Push) Close() {
 	}
 }
 
-// Send synchronously sends a record to the default push endpoint.
+// Send synchronously sends a record to the push endpoint.
 //
-// Uses the configured baseURL + pushURI. If record.RecordTime is zero,
-// it will be set to the current UTC time. Blocks until the request
-// completes or times out.
+// Blocks until the request completes or times out. If record.RecordTime is zero,
+// it will be set to the current UTC time.
+//
+// Parameters:
+//   - record: The data record to send
+//   - params: Send parameters (nil for defaults: URL uses baseURL+pushURI, Timeout uses client default)
 //
 // Returns an error if the request fails after all retries.
 //
@@ -189,98 +212,69 @@ func (p *Push) Close() {
 //	    RecordType: "metrics",
 //	    RecordData: map[string]any{"cpu": 85.5},
 //	}
-//	if err := p.Send(record); err != nil {
+//	if err := p.Send(record, nil); err != nil {
 //	    log.Printf("send failed: %v", err)
 //	}
-func (p *Push) Send(record *Record) error {
-	return p.SendURL(p.pushURL, record)
-}
+//
+//	// With custom URL and timeout
+//	err := p.Send(record, &push.SendParams{
+//	    URL:     "https://custom-api.com/hook",
+//	    Timeout: 5 * time.Second,
+//	})
+func (p *Push) Send(record *Record, params *SendParams) error {
+	url := p.pushURL
+	timeout := p.timeout
 
-// SendURL sends a record to a custom URL.
-//
-// The URL should be a complete HTTP/HTTPS endpoint. Uses the default
-// timeout unless overridden by SendURLWithTimeout.
-//
-// Example:
-//
-//	p.SendURL("https://custom-api.com/webhook", record)
-func (p *Push) SendURL(url string, record *Record) error {
-	return p.SendURLWithTimeout(url, record, p.timeout)
-}
-
-// SendWithTimeout sends a record with a custom timeout.
-//
-// Uses the default push URL but allows overriding the timeout for
-// this specific request.
-func (p *Push) SendWithTimeout(record *Record, timeout time.Duration) error {
-	return p.SendURLWithTimeout(p.pushURL, record, timeout)
-}
-
-// SendURLWithTimeout sends a record to a custom URL with a custom timeout.
-//
-// This is the most flexible synchronous send method, allowing full control
-// over both the destination and timeout. Automatically sets RecordTime
-// if not already set.
-//
-// Example:
-//
-//	err := p.SendURLWithTimeout(
-//	    "https://api.example.com/endpoint",
-//	    record,
-//	    5 * time.Second,
-//	)
-func (p *Push) SendURLWithTimeout(url string, record *Record, timeout time.Duration) error {
-	if url == "" {
-		url = p.pushURL
+	if params != nil {
+		if params.URL != "" {
+			url = params.URL
+		}
+		if params.Timeout > 0 {
+			timeout = params.Timeout
+		}
 	}
+
 	if record.RecordTime == 0 {
 		record.RecordTime = time.Now().UnixMilli()
 	}
 	return p.cli.PushTimeout(url, record, timeout)
 }
 
-// SendAsync sends a record asynchronously to the default push endpoint.
+// SendAsync sends a record asynchronously to the push endpoint.
 //
 // Non-blocking: returns immediately after queuing the request.
 // Uses an internal goroutine pool for efficient concurrent execution.
 // Returns an error if the record cannot be queued.
 //
+// Parameters:
+//   - record: The data record to send
+//   - params: Send parameters (nil for defaults: URL uses baseURL+pushURI, Timeout uses client default)
+//
 // Example:
 //
 //	// Fire and forget
-//	if err := p.SendAsync(record); err != nil {
+//	if err := p.SendAsync(record, nil); err != nil {
 //	    log.Printf("queue failed: %v", err)
 //	}
-func (p *Push) SendAsync(record *Record) error {
-	return p.SendAsyncURL(p.pushURL, record)
-}
-
-// SendAsyncURL sends a record asynchronously to a custom URL.
-func (p *Push) SendAsyncURL(url string, record *Record) error {
-	return p.SendAsyncURLTimeout(url, record, p.timeout)
-}
-
-// SendAsyncTimeout sends a record asynchronously with a custom timeout.
-func (p *Push) SendAsyncTimeout(record *Record, timeout time.Duration) error {
-	return p.SendAsyncURLTimeout(p.pushURL, record, timeout)
-}
-
-// SendAsyncURLTimeout sends a record asynchronously to a custom URL with a custom timeout.
 //
-// This is the most flexible asynchronous send method. The timeout applies
-// to each individual HTTP request. Automatically sets RecordTime if not set.
-//
-// Example:
-//
-//	p.SendAsyncURLTimeout(
-//	    "https://api.example.com/async-endpoint",
-//	    record,
-//	    10 * time.Second,
-//	)
-func (p *Push) SendAsyncURLTimeout(url string, record *Record, timeout time.Duration) error {
-	if url == "" {
-		url = p.pushURL
+//	// With custom URL and timeout
+//	err := p.SendAsync(record, &push.SendParams{
+//	    URL:     "https://custom-api.com/async-hook",
+//	    Timeout: 10 * time.Second,
+//	})
+func (p *Push) SendAsync(record *Record, params *SendParams) error {
+	url := p.pushURL
+	timeout := p.timeout
+
+	if params != nil {
+		if params.URL != "" {
+			url = params.URL
+		}
+		if params.Timeout > 0 {
+			timeout = params.Timeout
+		}
 	}
+
 	if record.RecordTime == 0 {
 		record.RecordTime = time.Now().UnixMilli()
 	}

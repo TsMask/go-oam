@@ -535,7 +535,7 @@ func TestSyncPushConcurrent(cfg Config) TestResult {
 					RecordType: "sync_test",
 					RecordData: map[string]interface{}{"seq": id*opsPerGoroutine + j},
 				}
-				err := p.SendURL(server.URL, record)
+				err := p.Send(record, &push.SendParams{URL: server.URL})
 				latency := time.Since(start)
 
 				if err != nil {
