@@ -1,14 +1,17 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	ws "github.com/tsmask/go-oam/ws"
 )
 
-// loggingMiddleware 日志中间件
 func loggingMiddleware(next ws.Handler) ws.Handler {
 	return func(conn *ws.Conn, req *ws.Request) {
 		start := time.Now()
@@ -18,10 +21,9 @@ func loggingMiddleware(next ws.Handler) ws.Handler {
 	}
 }
 
-// authMiddleware 认证中间件
 func authMiddleware(next ws.Handler) ws.Handler {
 	return func(conn *ws.Conn, req *ws.Request) {
-		token := conn.Meta["token"]
+		token, _ := conn.GetMeta("token")
 		if token == nil {
 			conn.SendError(req.ID, req.Action, 401, "unauthorized")
 			return
@@ -31,16 +33,22 @@ func authMiddleware(next ws.Handler) ws.Handler {
 }
 
 func main() {
-	// 创建服务端
+	// 创建服务端 — 使用全部配置项
 	server := ws.NewServer(
 		ws.NewJSONCodec(),
-		ws.WithServerMaxConns(100000),
-		ws.WithServerWorkerPoolSize(32),
-		ws.WithServerHeartbeat(30*time.Second, 60*time.Second),
-		ws.WithServerRateLimit(100000),
+		ws.WithServerMaxConns(100000),                // 最大连接数
+		ws.WithServerSendBufferSize(2000),             // 每连接发送缓冲区
+		ws.WithServerWorkerPoolSize(8),                // Worker 池大小
+		ws.WithServerJobQueueSize(100),                // 任务队列大小
+		ws.WithServerHeartbeat(30*time.Second),        // 心跳间隔
+		ws.WithServerRateLimit(50000),                 // 限流速率
+		ws.WithServerAllowedOrigins(func(origin string) bool { // 来源校验
+			return true
+		}),
+		ws.WithServerMaxMessageSize(4096),             // 最大消息大小
 	)
 
-	// 注册中间件（按注册顺序执行）
+	// 注册中间件
 	server.Use(loggingMiddleware)
 	server.Use(authMiddleware)
 
@@ -54,24 +62,65 @@ func main() {
 	})
 
 	server.Handle("info", func(conn *ws.Conn, req *ws.Request) {
-		conn.SendError(req.ID, req.Action, 0, "pong")
+		conn.SendOK(req.ID, req.Action, []byte(
+			fmt.Sprintf(`{"id":"%s","connections":%d}`, conn.ID(), server.ConnManager().Count()),
+		))
 	})
 
+	// 广播处理器
+	server.Handle("broadcast", func(conn *ws.Conn, req *ws.Request) {
+		server.Broadcast("notification", req.Data)
+		conn.SendOK(req.ID, req.Action, []byte(`{"sent":true}`))
+	})
+
+	// 条件广播：只发给指定连接
+	server.Handle("targeted", func(conn *ws.Conn, req *ws.Request) {
+		server.BroadcastFilter("targeted_msg", req.Data, func(c *ws.Conn) bool {
+			return c.ID() != conn.ID() // 不发给自己
+		})
+		conn.SendOK(req.ID, req.Action, []byte(`{"sent":true}`))
+	})
+
+	// 遍历连接
+	server.Handle("list", func(conn *ws.Conn, req *ws.Request) {
+		var ids []string
+		server.ConnManager().Range(func(c *ws.Conn) bool {
+			ids = append(ids, c.ID())
+			return true
+		})
+		conn.SendOK(req.ID, req.Action, []byte(
+			fmt.Sprintf(`{"count":%d,"ids":"%v"}`, len(ids), ids),
+		))
+	})
+
+	// 连接回调
 	server.OnConnect(func(conn *ws.Conn) {
-		log.Printf("客户端连接: %s", conn.ID)
+		conn.SetMeta("token", conn.ID()) // 设置元数据用于认证
+		conn.SetMeta("connected_at", conn.LastActiveTime().Format(time.RFC3339))
+		log.Printf("客户端连接: %s, 远程地址: %v", conn.ID(), func() any {
+			addr, _ := conn.GetMeta("remote_addr")
+			return addr
+		}())
 	})
 	server.OnDisconnect(func(conn *ws.Conn) {
-		log.Printf("客户端断开: %s", conn.ID)
+		log.Printf("客户端断开: %s", conn.ID())
 	})
 
-	// 性能指标
-	metrics := server.Metrics()
-	log.Printf("服务端指标: %+v", metrics)
-
-	// 启动服务端
+	// 挂载到用户自建的 HTTP 服务
 	mux := http.NewServeMux()
 	mux.Handle("/ws", server)
 
-	log.Printf("服务端启动 :9092")
-	log.Fatal(http.ListenAndServe(":9092", mux))
+	// 优雅关闭
+	go func() {
+		sig := make(chan os.Signal, 1)
+		signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+		<-sig
+		log.Println("收到信号，关闭中...")
+		server.Shutdown()
+		os.Exit(0)
+	}()
+
+	addr := ":9092"
+	log.Printf("服务端启动 %s", addr)
+	log.Fatal(http.ListenAndServe(addr, mux))
 }

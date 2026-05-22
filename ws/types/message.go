@@ -17,7 +17,7 @@ type Request struct {
 // 返回：true 表示请求有效，false 表示无效
 // 有效条件：Action 不为空
 func (r *Request) IsValid() bool {
-	return r.Action != "" && len(r.Data) >= 0
+	return r.Action != ""
 }
 
 // Response 响应消息
@@ -31,12 +31,12 @@ func (r *Request) IsValid() bool {
 //   - Msg: 错误消息，当 Code != 0 时填充
 //   - Data: 响应数据
 type Response struct {
-	ID     string `json:"id"`     // 请求标识符（原样返回 Request.ID）
-	Ts     int64  `json:"ts"`     // 响应时间戳（Unix毫秒）
-	Action string `json:"action"` // 动作类型
-	Code   int32  `json:"code"`   // 响应状态码：0成功，200成功，4xx客户端错误，5xx服务端错误
-	Msg    string `json:"msg"`    // 错误消息
-	Data   []byte `json:"data"`   // 响应数据
+	ID     string `json:"id"`             // 请求标识符（原样返回 Request.ID）
+	Ts     int64  `json:"ts"`             // 响应时间戳（Unix毫秒）
+	Action string `json:"action"`         // 动作类型
+	Code   int32  `json:"code"`           // 响应状态码：0成功，200成功，4xx客户端错误，5xx服务端错误
+	Msg    string `json:"msg,omitempty"`  // 错误消息
+	Data   []byte `json:"data,omitempty"` // 响应数据
 }
 
 // IsSuccess 检查响应是否成功

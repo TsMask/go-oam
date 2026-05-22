@@ -9,7 +9,6 @@ import (
 
 	"github.com/tsmask/go-oam/grpc/protobuf"
 	"github.com/tsmask/go-oam/grpc/types"
-	"github.com/tsmask/go-oam/ws/core"
 )
 
 // connShardCount 分片数量
@@ -85,9 +84,7 @@ type Server struct {
 	conns    *connManager
 	handlers *serverHandlers
 
-	workers   *core.WorkerPool
-	rateLimit *core.AtomicRateLimiter
-	metrics   *ServerMetrics
+	metrics *ServerMetrics
 
 	cfg serverConfig
 
@@ -118,14 +115,6 @@ func NewServer(opts ...ServerOption) *Server {
 		handlers: newServerHandlers(),
 		metrics:  newServerMetrics(),
 		cfg:      cfg,
-	}
-
-	if cfg.workerPoolSize > 0 {
-		s.workers = core.NewWorkerPool(cfg.workerPoolSize, cfg.jobQueueSize)
-	}
-
-	if cfg.rateLimit > 0 {
-		s.rateLimit = core.NewAtomicRateLimiter(cfg.rateLimit, cfg.maxConns)
 	}
 
 	return s

@@ -5,8 +5,6 @@ import (
 	"runtime"
 	"sync/atomic"
 	"time"
-
-	"github.com/tsmask/go-oam/ws/core"
 )
 
 // Client gRPC 客户端
@@ -23,10 +21,6 @@ type Client struct {
 	handlers *clientHandlers
 
 	closed atomic.Bool
-
-	pool      *core.Pool
-	rateLimit *core.AtomicRateLimiter
-	backoff   *core.AdaptiveBackoff
 
 	cfg ClientConfig
 
@@ -95,12 +89,9 @@ func NewClient(endpoint string, opts ...ClientOption) *Client {
 	}
 
 	c := &Client{
-		endpoint:  endpoint,
-		handlers:  newClientHandlers(),
-		pool:      core.NewPool(),
-		rateLimit: core.NewAtomicRateLimiter(cfg.RateLimit, cfg.MaxPendingRequests),
-		backoff:   core.NewAdaptiveBackoff(),
-		cfg:       cfg,
+		endpoint: endpoint,
+		handlers: newClientHandlers(),
+		cfg:      cfg,
 	}
 
 	return c

@@ -2,17 +2,16 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        v3.12.4
-// source: ws.proto
+// source: ws/protocol/ws.proto
 
 package protocol
 
 import (
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
-
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -22,18 +21,38 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// Request 请求消息
+// 客户端发送到服务端的请求
 type Request struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Action        string                 `protobuf:"bytes,2,opt,name=action,proto3" json:"action,omitempty"`
-	Data          []byte                 `protobuf:"bytes,3,opt,name=data,proto3" json:"data,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 请求唯一标识符
+	// 用途：用于请求-响应匹配，日志追踪、调试
+	// 说明：客户端生成，服务端原样返回
+	// 示例："req-20240101-001"
+	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// 动作类型
+	// 用途：路由到不同的处理器，表示要执行的动作
+	// 说明：对应 types.Request.Action 字段
+	// 示例：
+	//   - "echo" : 回显消息
+	//   - "chat" : 聊天消息
+	//   - "subscribe" : 订阅请求
+	Action string `protobuf:"bytes,2,opt,name=action,proto3" json:"action,omitempty"`
+	// 业务数据
+	// 用途：携带业务逻辑数据
+	// 编码：由codec决定（JSON/MsgPack/Protobuf等）
+	// 示例：
+	//
+	//	JSON : {"content": "hello"}
+	//	MsgPack : 0x81 ...
+	Data          []byte `protobuf:"bytes,3,opt,name=data,proto3" json:"data,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Request) Reset() {
 	*x = Request{}
-	mi := &file_ws_proto_msgTypes[0]
+	mi := &file_ws_protocol_ws_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -45,7 +64,7 @@ func (x *Request) String() string {
 func (*Request) ProtoMessage() {}
 
 func (x *Request) ProtoReflect() protoreflect.Message {
-	mi := &file_ws_proto_msgTypes[0]
+	mi := &file_ws_protocol_ws_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -58,7 +77,7 @@ func (x *Request) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Request.ProtoReflect.Descriptor instead.
 func (*Request) Descriptor() ([]byte, []int) {
-	return file_ws_proto_rawDescGZIP(), []int{0}
+	return file_ws_protocol_ws_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *Request) GetId() string {
@@ -82,21 +101,54 @@ func (x *Request) GetData() []byte {
 	return nil
 }
 
+// Response 响应消息
+// 服务端返回给客户端的响应
 type Response struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Ts            int64                  `protobuf:"varint,2,opt,name=ts,proto3" json:"ts,omitempty"`
-	Action        string                 `protobuf:"bytes,3,opt,name=action,proto3" json:"action,omitempty"`
-	Code          int32                  `protobuf:"varint,4,opt,name=code,proto3" json:"code,omitempty"`
-	Msg           string                 `protobuf:"bytes,5,opt,name=msg,proto3" json:"msg,omitempty"`
-	Data          []byte                 `protobuf:"bytes,6,opt,name=data,proto3" json:"data,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 请求标识符
+	// 用途：与Request.id对应，用于匹配请求
+	// 说明：原样返回Request.id
+	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// 响应时间戳
+	// 用途：服务端处理完成时间，用于计算延迟
+	// 格式：Unix时间戳（毫秒）
+	// 示例：1704067200000 (2024-01-01 00:00:00 UTC)
+	Ts int64 `protobuf:"varint,2,opt,name=ts,proto3" json:"ts,omitempty"`
+	// 动作类型
+	// 用途：标识响应消息的动作类型，用于路由和分类
+	// 说明：对应 types.Response.Action 字段
+	// 示例：
+	//   - "broadcast" : 广播消息
+	//   - "notification" : 通知消息
+	Action string `protobuf:"bytes,3,opt,name=action,proto3" json:"action,omitempty"`
+	// 响应状态码
+	// 用途：表示处理结果
+	// 值：
+	//
+	//	0     : 成功
+	//	200   : 成功（兼容HTTP）
+	//	4xx   : 客户端错误（如参数错误、权限不足）
+	//	5xx   : 服务端错误（如内部错误、服务不可用）
+	//
+	// 说明：与HTTP状态码语义一致
+	Code int32 `protobuf:"varint,4,opt,name=code,proto3" json:"code,omitempty"`
+	// 错误消息
+	// 用途：当code != 0时的错误描述
+	// 内容：人类可读的错误信息，用于调试
+	// 示例："invalid parameters", "permission denied"
+	Msg string `protobuf:"bytes,5,opt,name=msg,proto3" json:"msg,omitempty"`
+	// 响应数据
+	// 用途：携带业务响应数据
+	// 编码：与Request.data一致
+	// 说明：成功时包含业务数据，失败时可能为空
+	Data          []byte `protobuf:"bytes,6,opt,name=data,proto3" json:"data,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Response) Reset() {
 	*x = Response{}
-	mi := &file_ws_proto_msgTypes[1]
+	mi := &file_ws_protocol_ws_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -108,7 +160,7 @@ func (x *Response) String() string {
 func (*Response) ProtoMessage() {}
 
 func (x *Response) ProtoReflect() protoreflect.Message {
-	mi := &file_ws_proto_msgTypes[1]
+	mi := &file_ws_protocol_ws_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -121,7 +173,7 @@ func (x *Response) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Response.ProtoReflect.Descriptor instead.
 func (*Response) Descriptor() ([]byte, []int) {
-	return file_ws_proto_rawDescGZIP(), []int{1}
+	return file_ws_protocol_ws_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *Response) GetId() string {
@@ -166,41 +218,41 @@ func (x *Response) GetData() []byte {
 	return nil
 }
 
-var File_ws_proto protoreflect.FileDescriptor
+var File_ws_protocol_ws_proto protoreflect.FileDescriptor
 
-const file_ws_proto_rawDesc = "" +
+const file_ws_protocol_ws_proto_rawDesc = "" +
 	"\n" +
-	"\bws.proto\x12\bprotocol\"B\n" +
+	"\x14ws/protocol/ws.proto\x12\bprotocol\"E\n" +
 	"\aRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
 	"\x06action\x18\x02 \x01(\tR\x06action\x12\x12\n" +
-	"\x04data\x18\x03 \x01(\fR\x04data\"d\n" +
+	"\x04data\x18\x03 \x01(\fR\x04data\"|\n" +
 	"\bResponse\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x0e\n" +
-	"\x02ts\x18\x02 \x01(\x03R\x02ts\x12\x14\n" +
+	"\x02ts\x18\x02 \x01(\x03R\x02ts\x12\x16\n" +
 	"\x06action\x18\x03 \x01(\tR\x06action\x12\x12\n" +
 	"\x04code\x18\x04 \x01(\x05R\x04code\x12\x10\n" +
 	"\x03msg\x18\x05 \x01(\tR\x03msg\x12\x12\n" +
 	"\x04data\x18\x06 \x01(\fR\x04dataB&Z$github.com/tsmask/go-oam/ws/protocolb\x06proto3"
 
 var (
-	file_ws_proto_rawDescOnce sync.Once
-	file_ws_proto_rawDescData []byte
+	file_ws_protocol_ws_proto_rawDescOnce sync.Once
+	file_ws_protocol_ws_proto_rawDescData []byte
 )
 
-func file_ws_proto_rawDescGZIP() []byte {
-	file_ws_proto_rawDescOnce.Do(func() {
-		file_ws_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_ws_proto_rawDesc), len(file_ws_proto_rawDesc)))
+func file_ws_protocol_ws_proto_rawDescGZIP() []byte {
+	file_ws_protocol_ws_proto_rawDescOnce.Do(func() {
+		file_ws_protocol_ws_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_ws_protocol_ws_proto_rawDesc), len(file_ws_protocol_ws_proto_rawDesc)))
 	})
-	return file_ws_proto_rawDescData
+	return file_ws_protocol_ws_proto_rawDescData
 }
 
-var file_ws_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
-var file_ws_proto_goTypes = []any{
+var file_ws_protocol_ws_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_ws_protocol_ws_proto_goTypes = []any{
 	(*Request)(nil),  // 0: protocol.Request
 	(*Response)(nil), // 1: protocol.Response
 }
-var file_ws_proto_depIdxs = []int32{
+var file_ws_protocol_ws_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
 	0, // [0:0] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name
@@ -208,26 +260,26 @@ var file_ws_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for field type_name
 }
 
-func init() { file_ws_proto_init() }
-func file_ws_proto_init() {
-	if File_ws_proto != nil {
+func init() { file_ws_protocol_ws_proto_init() }
+func file_ws_protocol_ws_proto_init() {
+	if File_ws_protocol_ws_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_ws_proto_rawDesc), len(file_ws_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_ws_protocol_ws_proto_rawDesc), len(file_ws_protocol_ws_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_ws_proto_goTypes,
-		DependencyIndexes: file_ws_proto_depIdxs,
-		MessageInfos:      file_ws_proto_msgTypes,
+		GoTypes:           file_ws_protocol_ws_proto_goTypes,
+		DependencyIndexes: file_ws_protocol_ws_proto_depIdxs,
+		MessageInfos:      file_ws_protocol_ws_proto_msgTypes,
 	}.Build()
-	File_ws_proto = out.File
-	file_ws_proto_goTypes = nil
-	file_ws_proto_depIdxs = nil
+	File_ws_protocol_ws_proto = out.File
+	file_ws_protocol_ws_proto_goTypes = nil
+	file_ws_protocol_ws_proto_depIdxs = nil
 }

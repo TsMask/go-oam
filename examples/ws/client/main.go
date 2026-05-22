@@ -11,15 +11,31 @@ import (
 )
 
 func main() {
-	// 创建客户端（简化 API）
-	client := ws.NewClient("ws://localhost:9092",
+	// 创建客户端 — 使用全部配置项
+	client := ws.NewClient("ws://localhost:9092/ws",
 		ws.NewJSONCodec(),
-		ws.WithClientSendBufferSize(1000),
-		ws.WithClientWorkers(4),
-		ws.WithClientBatchSize(100),
-		ws.WithClientRateLimit(10000),
-		ws.WithClientDialTimeout(30*time.Second),
+		ws.WithClientSendBufferSize(2000),           // 发送队列大小
+		ws.WithClientDialTimeout(10*time.Second),     // 连接超时
+		ws.WithClientRequestTimeout(30*time.Second),  // 请求超时
+		ws.WithClientMaxPendingRequests(5000),         // 最大 pending 数
+		ws.WithClientAutoReconnect(true),              // 自动重连
+		ws.WithClientMaxReconnectAttempts(5),          // 最大重连次数
 	)
+
+	// 状态回调
+	client.OnState(func(state ws.State) {
+		log.Printf("状态变更: %s", state)
+	})
+
+	// 错误回调
+	client.OnError(func(err error) {
+		log.Printf("错误: %v", err)
+	})
+
+	// 响应回调
+	client.OnReceive(func(resp *ws.Response) {
+		log.Printf("响应: id=%s code=%d", resp.ID, resp.Code)
+	})
 
 	// 连接
 	ctx := context.Background()
@@ -28,30 +44,48 @@ func main() {
 	}
 	defer client.Close()
 
-	// 状态回调（使用导出的 State 类型）
-	client.OnState(func(state ws.State) {
-		log.Printf("状态变更: %s", state)
+	log.Printf("客户端连接成功，状态: %s", client.State())
+
+	// 同步请求
+	resp, err := client.Send(ctx, &ws.Request{
+		Action: "echo",
+		Data:   []byte(`{"msg":"hello"}`),
+	})
+	if err != nil {
+		log.Printf("同步请求失败: %v", err)
+	} else {
+		log.Printf("同步响应: id=%s code=%d data=%s", resp.ID, resp.Code, resp.Data)
+	}
+
+	// 带超时的请求
+	resp, err = client.SendWithTimeout(&ws.Request{
+		Action: "ping",
+	}, 5*time.Second)
+	if err != nil {
+		log.Printf("超时请求失败: %v", err)
+	} else {
+		log.Printf("超时响应: id=%s code=%d data=%s", resp.ID, resp.Code, resp.Data)
+	}
+
+	// 异步请求
+	client.SendAsync(ctx, &ws.Request{
+		Action: "echo",
+		Data:   []byte(`{"msg":"async"}`),
+	}, func(resp *ws.Response, err error) {
+		if err != nil {
+			log.Printf("异步请求失败: %v", err)
+		} else {
+			log.Printf("异步响应: id=%s code=%d data=%s", resp.ID, resp.Code, resp.Data)
+		}
 	})
 
-	// 错误处理
-	client.OnError(func(err error) {
-		log.Printf("错误: %v", err)
-	})
-
-	// 响应回调（使用导出的 Response 类型）
-	client.OnReceive(func(resp *ws.Response) {
-		log.Printf("响应: id=%s code=%d", resp.ID, resp.Code)
-	})
-
-	log.Println("客户端连接成功")
-
-	// 性能测试
+	// 并发性能测试
+	log.Println("开始并发性能测试...")
 	success := atomic.Int64{}
 	failed := atomic.Int64{}
 	start := time.Now()
 
-	// 1000请求性能测试
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 100; i++ {
 		go func(seq int) {
 			_, err := client.Send(ctx, &ws.Request{
 				Action: "echo",
@@ -65,32 +99,9 @@ func main() {
 		}(i)
 	}
 
-	// 等待完成
 	time.Sleep(5 * time.Second)
 	duration := time.Since(start)
-	metrics := client.Metrics()
 
 	log.Printf("测试完成: 成功=%d 失败=%d 耗时=%v", success.Load(), failed.Load(), duration)
 	log.Printf("QPS: %.2f", float64(success.Load())/duration.Seconds())
-	log.Printf("指标: 队列=%d 活跃=%d 限流=%d 背压=%d",
-		metrics.SendQueueSize.Load(),
-		metrics.ActiveRequests.Load(),
-		metrics.RateLimitDrops.Load(),
-		metrics.BackpressureHits.Load(),
-	)
-
-	// 测试异步请求
-	log.Println("测试异步请求...")
-	client.SendAsync(ctx, &ws.Request{
-		Action: "echo",
-		Data:   []byte(`{"test":"async"}`),
-	}, func(resp *ws.Response, err error) {
-		if err != nil {
-			log.Printf("异步请求失败: %v", err)
-		} else {
-			log.Printf("异步请求成功: id=%s code=%d", resp.ID, resp.Code)
-		}
-	})
-
-	time.Sleep(1 * time.Second)
 }

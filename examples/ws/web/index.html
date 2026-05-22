@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WebSocket 功能验证</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f0f2f5;min-height:100vh;display:flex;flex-direction:column}
+.topbar{background:#1a1a2e;color:#fff;padding:12px 24px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.topbar h1{font-size:16px;font-weight:600;letter-spacing:.5px}
+.topbar .status{display:flex;align-items:center;gap:8px;font-size:13px}
+.dot{width:8px;height:8px;border-radius:50%;background:#dc3545}
+.dot.on{background:#28a745}
+.dot.wait{background:#ffc107;animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.4}}
+.layout{display:flex;flex:1;overflow:hidden}
+.left{width:280px;background:#fff;border-right:1px solid #e8e8e8;display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto}
+.right{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.panel{padding:16px;border-bottom:1px solid #f0f0f0}
+.panel-title{font-size:12px;font-weight:600;color:#999;text-transform:uppercase;margin-bottom:10px;letter-spacing:1px}
+input,textarea{width:100%;padding:8px 10px;border:1px solid #d9d9d9;border-radius:4px;font-size:13px;font-family:inherit}
+input:focus,textarea:focus{outline:none;border-color:#1890ff;box-shadow:0 0 0 2px rgba(24,144,255,.1)}
+textarea{resize:vertical;min-height:60px;font-family:'Courier New',monospace}
+label{display:block;font-size:12px;color:#666;margin-bottom:4px}
+.btn{padding:6px 14px;border:none;border-radius:4px;font-size:12px;font-weight:500;cursor:pointer;transition:all .15s}
+.btn:active{transform:scale(.97)}
+.btn-pri{background:#1890ff;color:#fff}
+.btn-pri:hover{background:#40a9ff}
+.btn-green{background:#52c41a;color:#fff}
+.btn-green:hover{background:#73d13d}
+.btn-red{background:#ff4d4f;color:#fff}
+.btn-red:hover{background:#ff7875}
+.btn-ghost{background:#f5f5f5;color:#333;border:1px solid #d9d9d9}
+.btn-ghost:hover{background:#e8e8e8}
+.btn-sm{padding:4px 10px;font-size:11px}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.btn-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.mt{margin-top:8px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:12px 16px;background:#fafafa;border-bottom:1px solid #f0f0f0;flex-shrink:0}
+.stat{text-align:center}
+.stat-val{font-size:18px;font-weight:700;color:#1a1a2e}
+.stat-lbl{font-size:10px;color:#999;margin-top:2px}
+.log-area{flex:1;overflow-y:auto;padding:12px 16px;font-family:'Courier New',monospace;font-size:12px;line-height:1.7;background:#1e1e2e;color:#d4d4d4}
+.log-area .row{padding:2px 0;word-break:break-all}
+.t-sys{color:#6a9955}
+.t-send{color:#569cd6}
+.t-recv{color:#dcdcaa}
+.t-err{color:#f44747}
+.t-idx{color:#808080;margin-right:6px}
+.t-tag{display:inline-block;padding:0 5px;border-radius:2px;font-size:10px;margin-right:6px;font-weight:600}
+.tag-send{background:#264f78;color:#569cd6}
+.tag-recv{background:#2d4a27;color:#6a9955}
+.tag-err{background:#5a1d1d;color:#f44747}
+.tag-sys{background:#3a3a3a;color:#ccccb3}
+.tag-ok{background:#1e3a1e;color:#6a9955}
+.detail{color:#808080;margin-left:4px;font-size:11px}
+.perf-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}
+.perf-box{background:#f9f9f9;border:1px solid #e8e8e8;border-radius:4px;padding:8px;text-align:center}
+.perf-val{font-size:16px;font-weight:700;color:#1890ff}
+.perf-lbl{font-size:10px;color:#999;margin-top:2px}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>WebSocket 功能验证</h1>
+  <div class="status">
+    <div class="dot" id="dot"></div>
+    <span id="statusText">未连接</span>
+  </div>
+</div>
+
+<div class="layout">
+  <!-- 左侧面板 -->
+  <div class="left">
+
+    <div class="panel">
+      <div class="panel-title">连接</div>
+      <label>服务地址</label>
+      <input id="url" value="ws://localhost:9092/ws">
+      <div class="btn-row">
+        <button class="btn btn-green btn-sm" id="btnConn" onclick="doConnect()">连接</button>
+        <button class="btn btn-red btn-sm" id="btnDisc" onclick="doDisconnect()" disabled>断开</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">基础请求</div>
+      <div class="grid2">
+        <button class="btn btn-ghost btn-sm" onclick="send('ping')">ping</button>
+        <button class="btn btn-ghost btn-sm" onclick="send('echo','hello')">echo</button>
+        <button class="btn btn-ghost btn-sm" onclick="send('info')">info</button>
+        <button class="btn btn-ghost btn-sm" onclick="send('list')">list</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">元数据</div>
+      <label>设置名称</label>
+      <div style="display:flex;gap:6px">
+        <input id="metaName" value="test-user">
+        <button class="btn btn-ghost btn-sm" onclick="send('set_name',document.getElementById('metaName').value)">设置</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">广播</div>
+      <label>广播内容</label>
+      <input id="bcastMsg" value="大家好">
+      <div class="btn-row">
+        <button class="btn btn-ghost btn-sm" onclick="send('broadcast',document.getElementById('bcastMsg').value)">全部广播</button>
+        <button class="btn btn-ghost btn-sm" onclick="send('targeted',document.getElementById('bcastMsg').value)">排除自己</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">查找连接</div>
+      <div style="display:flex;gap:6px">
+        <input id="findId" placeholder="连接 ID">
+        <button class="btn btn-ghost btn-sm" onclick="send('get_conn',document.getElementById('findId').value)">查找</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">边界测试</div>
+      <div class="btn-row">
+        <button class="btn btn-ghost btn-sm" onclick="testOversized()">超大消息 (超 4KB)</button>
+        <button class="btn btn-ghost btn-sm" onclick="testUnknownAction()">未知 action</button>
+        <button class="btn btn-ghost btn-sm" onclick="testInvalidJSON()">非法 JSON</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">性能测试</div>
+      <label>请求数</label>
+      <input id="perfCount" type="number" value="200" min="1" max="10000">
+      <div class="btn-row">
+        <button class="btn btn-pri btn-sm" onclick="perfTest()">开始测试</button>
+        <button class="btn btn-ghost btn-sm" onclick="resetStats()">重置</button>
+      </div>
+      <div class="perf-grid">
+        <div class="perf-box"><div class="perf-val" id="pQps">0</div><div class="perf-lbl">QPS</div></div>
+        <div class="perf-box"><div class="perf-val" id="pLat">0</div><div class="perf-lbl">延迟ms</div></div>
+        <div class="perf-box"><div class="perf-val" id="pRate">0%</div><div class="perf-lbl">成功率</div></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 右侧日志 -->
+  <div class="right">
+    <div class="stats">
+      <div class="stat"><div class="stat-val" id="sSent">0</div><div class="stat-lbl">发送</div></div>
+      <div class="stat"><div class="stat-val" id="sRecv">0</div><div class="stat-lbl">接收</div></div>
+      <div class="stat"><div class="stat-val" id="sOk">0</div><div class="stat-lbl">成功</div></div>
+      <div class="stat"><div class="stat-val" id="sErr">0</div><div class="stat-lbl">失败</div></div>
+    </div>
+    <div class="log-area" id="log"></div>
+    <div style="padding:8px 16px;background:#1e1e2e;border-top:1px solid #333;display:flex;justify-content:flex-end">
+      <button class="btn btn-ghost btn-sm" onclick="clearLog()">清空日志</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let ws = null, seq = 0;
+let stats = { sent:0, recv:0, ok:0, err:0, latencies:[], perfStart:0, perfDone:0, perfTotal:0 };
+let pending = new Map();
+
+function $(id){ return document.getElementById(id) }
+
+function updateStatus(s){
+  const dot = $('dot'), txt = $('statusText');
+  dot.className = 'dot';
+  if(s==='on'){ dot.classList.add('on'); txt.textContent='已连接'; }
+  else if(s==='wait'){ dot.classList.add('wait'); txt.textContent='连接中...'; }
+  else { txt.textContent='未连接'; }
+}
+
+function updateStats(){
+  $('sSent').textContent = stats.sent;
+  $('sRecv').textContent = stats.recv;
+  $('sOk').textContent = stats.ok;
+  $('sErr').textContent = stats.err;
+}
+
+function resetStats(){
+  stats = { sent:0, recv:0, ok:0, err:0, latencies:[], perfStart:0, perfDone:0, perfTotal:0 };
+  updateStats();
+  $('pQps').textContent='0'; $('pLat').textContent='0'; $('pRate').textContent='0%';
+}
+
+function log(tag, cls, msg, detail){
+  const area = $('log');
+  const i = area.children.length + 1;
+  let html = `<div class="row"><span class="t-idx">${String(i).padStart(3,'0')}</span><span class="t-tag tag-${cls}">${tag}</span><span class="t-${cls}">${msg}</span>`;
+  if(detail) html += `<span class="detail">${detail}</span>`;
+  html += '</div>';
+  area.insertAdjacentHTML('beforeend', html);
+  area.scrollTop = area.scrollHeight;
+}
+
+function clearLog(){ $('log').innerHTML = '' }
+
+function doConnect(){
+  const url = $('url').value.trim();
+  if(!url) return;
+  updateStatus('wait');
+  log('SYS','sys',`正在连接 ${url}`);
+  ws = new WebSocket(url);
+  ws.onopen = () => {
+    updateStatus('on');
+    $('btnConn').disabled = true;
+    $('btnDisc').disabled = false;
+    log('SYS','sys','连接成功');
+  };
+  ws.onmessage = (e) => handleMsg(e.data);
+  ws.onerror = () => log('ERR','err','WebSocket 错误');
+  ws.onclose = (e) => {
+    updateStatus('off');
+    $('btnConn').disabled = false;
+    $('btnDisc').disabled = true;
+    log('SYS','sys',`连接关闭 code=${e.code}`);
+  };
+}
+
+function doDisconnect(){
+  if(ws){ ws.close(1000); ws = null; }
+}
+
+function send(action, data){
+  if(!ws || ws.readyState !== 1){ log('ERR','err','未连接'); return; }
+  const id = crypto.randomUUID();
+  const body = data !== undefined ? (typeof data === 'string' ? data : JSON.stringify(data)) : '';
+  const payload = JSON.stringify({ id, action, data: body });
+  ws.send(payload);
+  stats.sent++;
+  pending.set(id, { t: Date.now(), action });
+  updateStats();
+  log('REQ','send', action, body || null);
+}
+
+function handleMsg(raw){
+  stats.recv++;
+  let resp;
+  try { resp = JSON.parse(raw) } catch(e){ log('ERR','err','JSON 解析失败', raw); stats.err++; updateStats(); return; }
+
+  // 匹配延迟
+  let lat = '';
+  if(resp.id && pending.has(resp.id)){
+    const p = pending.get(resp.id);
+    const ms = Date.now() - p.t;
+    stats.latencies.push(ms);
+    pending.delete(resp.id);
+    lat = `${ms}ms`;
+  }
+
+  if(resp.code === 200 || resp.code === 0){
+    stats.ok++;
+    let preview = '';
+    if(resp.data){
+      try{ preview = typeof resp.data === 'string' ? resp.data : JSON.stringify(resp.data) }catch{ preview = String(resp.data) }
+      if(preview.length > 200) preview = preview.slice(0,200) + '...';
+    }
+    log('RSP','recv', `${resp.action} code=${resp.code}`, lat + (preview ? ' ' + preview : ''));
+  } else {
+    stats.err++;
+    log('ERR','err', `${resp.action||'?'} code=${resp.code} msg=${resp.msg||''}`, lat);
+  }
+
+  // 广播通知单独显示
+  if(resp.action === 'notification' || resp.action === 'targeted_msg'){
+    log('NTF','sys', `${resp.action}: ${resp.data || ''}`);
+  }
+
+  updateStats();
+}
+
+// 边界测试：超大消息
+function testOversized(){
+  if(!ws || ws.readyState !== 1){ log('ERR','err','未连接'); return; }
+  const big = 'x'.repeat(5000);
+  const id = crypto.randomUUID();
+  const payload = JSON.stringify({ id, action:'echo', data: big });
+  ws.send(payload);
+  stats.sent++;
+  pending.set(id, { t: Date.now(), action:'echo' });
+  updateStats();
+  log('REQ','send','echo (5000 bytes, 超过 4KB 限制)', '应被服务端拒绝或截断');
+}
+
+// 边界测试：未知 action
+function testUnknownAction(){
+  send('nonexistent_action', 'test');
+}
+
+// 边界测试：非法 JSON
+function testInvalidJSON(){
+  if(!ws || ws.readyState !== 1){ log('ERR','err','未连接'); return; }
+  ws.send('这不是JSON{{{');
+  stats.sent++;
+  updateStats();
+  log('REQ','send','发送非法 JSON', '应被服务端拒绝');
+}
+
+// 性能测试
+function perfTest(){
+  if(!ws || ws.readyState !== 1){ log('ERR','err','未连接'); return; }
+  const count = parseInt($('perfCount').value) || 200;
+  stats.perfStart = Date.now();
+  stats.perfTotal = count;
+  stats.perfDone = 0;
+  stats.latencies = [];
+  log('SYS','sys',`性能测试开始 ${count} 条`);
+
+  let sent = 0;
+  const batchSize = Math.min(50, count);
+  const timer = setInterval(() => {
+    if(sent >= count){ clearInterval(timer); return; }
+    for(let i = 0; i < batchSize && sent < count; i++){
+      send('echo', `perf-${sent}`);
+      sent++;
+    }
+  }, 10);
+
+  // 监听完成
+  const check = setInterval(() => {
+    if(stats.perfDone >= count){
+      clearInterval(check);
+      const dur = Date.now() - stats.perfStart;
+      const qps = (count / (dur/1000)).toFixed(1);
+      const avg = stats.latencies.length ? Math.round(stats.latencies.reduce((a,b)=>a+b,0)/stats.latencies.length) : 0;
+      const rate = (stats.ok / (stats.ok + stats.err) * 100).toFixed(1);
+      $('pQps').textContent = qps;
+      $('pLat').textContent = avg;
+      $('pRate').textContent = rate + '%';
+      log('SYS','sys',`性能测试完成: ${dur}ms, QPS=${qps}, 延迟=${avg}ms, 成功率=${rate}%`);
+    }
+  }, 100);
+
+  // 追踪完成数
+  const origHandler = handleMsg;
+  const trackHandler = function(raw){
+    origHandler(raw);
+    stats.perfDone++;
+  };
+  // 简单追踪：用 interval 检查 recv 数量变化
+  let lastRecv = stats.recv;
+  const trackTimer = setInterval(() => {
+    if(stats.recv >= stats.perfStart_recv + count || Date.now() - stats.perfStart > 30000){
+      stats.perfDone = stats.perfTotal;
+      clearInterval(trackTimer);
+    }
+  }, 200);
+  stats.perfStart_recv = stats.recv;
+  setTimeout(() => { stats.perfDone = stats.perfTotal }, 30000); // 超时兜底
+}
+
+// 拦截 handleMsg 追踪性能完成数
+const _origHandleMsg = handleMsg;
+handleMsg = function(raw){
+  _origHandleMsg(raw);
+  if(stats.perfTotal > 0) stats.perfDone++;
+};
+
+// Ctrl+Enter 发送 echo
+document.addEventListener('keydown', e => {
+  if(e.ctrlKey && e.key === 'Enter') send('echo', '快捷发送');
+});
+</script>
+</body>
+</html>
