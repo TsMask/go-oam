@@ -5,37 +5,26 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "兼容现有",
+            "name": "PUSH-stats",
             "type": "go",
             "request": "launch",
             "mode": "debug",
-            "program": "examples/oam_manager/main.go",
+            "program": "${workspaceFolder}/examples/push/stats/main.go",
+            "cwd": "${workspaceFolder}/examples",
             "console": "integratedTerminal",
+            "env": {"GO111MODULE": "on"},
+            "args": ["100"]
         },
         {
-            "name": "独立协程",
+            "name": "WS-web",
             "type": "go",
             "request": "launch",
             "mode": "debug",
-            "program": "examples/independent_coprocessor/main.go",
+            "program": "${workspaceFolder}/examples/ws/web/main.go",
+            "cwd": "${workspaceFolder}/examples",
             "console": "integratedTerminal",
-        },
-        {
-            "name": "独立运行",
-            "type": "go",
-            "request": "launch",
-            "mode": "debug",
-            "program": "examples/standalone/main.go",
-            "console": "integratedTerminal",
-            "args": ["--dev", "-c", "./dev/omc.yaml"]
-        },
-         {
-            "name": "测试 WS Client",
-            "type": "go",
-            "request": "launch",
-            "mode": "debug",
-            "program": "examples/ws_client/main.go",
-            "console": "integratedTerminal",
-        },
+            "env": {"GO111MODULE": "on"},
+            "args": ["--env", "local", "-c", "./local/omc.yaml"]
+        }
     ]
 }
