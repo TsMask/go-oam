@@ -35,17 +35,13 @@ func authMiddleware(next ws.Handler) ws.Handler {
 func main() {
 	// 创建服务端 — 使用全部配置项
 	server := ws.NewServer(
-		ws.NewJSONCodec(),
-		ws.WithServerMaxConns(100000),                // 最大连接数
-		ws.WithServerSendBufferSize(2000),             // 每连接发送缓冲区
-		ws.WithServerWorkerPoolSize(8),                // Worker 池大小
-		ws.WithServerJobQueueSize(100),                // 任务队列大小
-		ws.WithServerHeartbeat(30*time.Second),        // 心跳间隔
-		ws.WithServerRateLimit(50000),                 // 限流速率
+		ws.WithServerMaxConns(100000),          // 最大连接数
+		ws.WithServerSendBufferSize(2000),      // 每连接发送缓冲区
+		ws.WithServerHeartbeat(30*time.Second), // 心跳间隔
 		ws.WithServerAllowedOrigins(func(origin string) bool { // 来源校验
 			return true
 		}),
-		ws.WithServerMaxMessageSize(4096),             // 最大消息大小
+		ws.WithServerMaxMessageSize(4096), // 最大消息大小
 	)
 
 	// 注册中间件
@@ -93,14 +89,12 @@ func main() {
 		))
 	})
 
-	// 连接回调
-	server.OnConnect(func(conn *ws.Conn) {
+	// 连接回调 — 通过 r 访问 HTTP 请求信息
+	server.OnConnect(func(conn *ws.Conn, r *http.Request) {
 		conn.SetMeta("token", conn.ID()) // 设置元数据用于认证
+		conn.SetMeta("remote_addr", r.RemoteAddr)
 		conn.SetMeta("connected_at", conn.LastActiveTime().Format(time.RFC3339))
-		log.Printf("客户端连接: %s, 远程地址: %v", conn.ID(), func() any {
-			addr, _ := conn.GetMeta("remote_addr")
-			return addr
-		}())
+		log.Printf("客户端连接: %s, 远程地址: %s", conn.ID(), r.RemoteAddr)
 	})
 	server.OnDisconnect(func(conn *ws.Conn) {
 		log.Printf("客户端断开: %s", conn.ID())

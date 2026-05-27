@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	ws "github.com/tsmask/go-oam/ws"
 )
 
+// go run main.go
 func main() {
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -34,13 +36,10 @@ func main() {
 
 	// 创建服务端 — 使用全部配置项
 	server := ws.NewServer(
-		ws.NewJSONCodec(),
+		ws.WithServerCodec("protobuf"),         // 编解码器
 		ws.WithServerMaxConns(1000),            // 最大连接数
 		ws.WithServerSendBufferSize(2000),      // 发送缓冲区
-		ws.WithServerWorkerPoolSize(4),         // Worker 池
-		ws.WithServerJobQueueSize(50),          // 任务队列
 		ws.WithServerHeartbeat(30*time.Second), // 心跳 30s
-		ws.WithServerRateLimit(10000),          // 限流
 		ws.WithServerAllowedOrigins(func(origin string) bool {
 			return true // 允许所有来源
 		}),
@@ -63,7 +62,10 @@ func main() {
 
 	// ping — 健康检查
 	server.Handle("ping", func(conn *ws.Conn, req *ws.Request) {
-		conn.SendOK(req.ID, req.Action, []byte(`{"status":"ok"}`))
+		data, _ := json.Marshal(map[string]string{
+			"status": "ok",
+		})
+		conn.SendOK(req.ID, req.Action, data)
 	})
 
 	// info — 连接信息（ConnManager.Count + Conn.GetMeta）
@@ -126,10 +128,72 @@ func main() {
 		)))
 	})
 
-	// 连接回调
-	server.OnConnect(func(conn *ws.Conn) {
+	// subscribe — 订阅 topic（Conn.Subscribe）
+	server.Handle("subscribe", func(conn *ws.Conn, req *ws.Request) {
+		var body struct {
+			Topics []string `json:"topics"`
+		}
+		if err := json.Unmarshal(req.Data, &body); err != nil || len(body.Topics) == 0 {
+			conn.SendError(req.ID, req.Action, 400, "invalid topics")
+			return
+		}
+		conn.Subscribe(body.Topics...)
+		topics := conn.Subscriptions()
+		data, _ := json.Marshal(map[string]any{"subscribed": body.Topics, "all": topics})
+		conn.SendOK(req.ID, req.Action, data)
+	})
+
+	// unsubscribe — 取消订阅 topic（Conn.Unsubscribe）
+	server.Handle("unsubscribe", func(conn *ws.Conn, req *ws.Request) {
+		var body struct {
+			Topics []string `json:"topics"`
+		}
+		if err := json.Unmarshal(req.Data, &body); err != nil || len(body.Topics) == 0 {
+			conn.SendError(req.ID, req.Action, 400, "invalid topics")
+			return
+		}
+		conn.Unsubscribe(body.Topics...)
+		topics := conn.Subscriptions()
+		data, _ := json.Marshal(map[string]any{"unsubscribed": body.Topics, "all": topics})
+		conn.SendOK(req.ID, req.Action, data)
+	})
+
+	// publish — 向 topic 发布消息（Server.Publish）
+	server.Handle("publish", func(conn *ws.Conn, req *ws.Request) {
+		var body struct {
+			Topic string `json:"topic"`
+		}
+		if err := json.Unmarshal(req.Data, &body); err != nil || body.Topic == "" {
+			conn.SendError(req.ID, req.Action, 400, "invalid topic")
+			return
+		}
+		count := server.TopicCount(body.Topic)
+		server.Publish(body.Topic, req.Data)
+		data, _ := json.Marshal(map[string]any{"topic": body.Topic, "delivered": count})
+		conn.SendOK(req.ID, req.Action, data)
+	})
+
+	// topics — 查看所有 topic 和当前订阅（Server.Topics + Conn.Subscriptions）
+	server.Handle("topics", func(conn *ws.Conn, req *ws.Request) {
+		all := server.Topics()
+		mine := conn.Subscriptions()
+		result := map[string]any{
+			"all_topics": all,
+			"my_topics":  mine,
+		}
+		for _, t := range all {
+			result[t+"_count"] = server.TopicCount(t)
+		}
+		data, _ := json.Marshal(result)
+		conn.SendOK(req.ID, req.Action, data)
+	})
+
+	// 连接回调 — 可通过 r 访问 HTTP 请求信息（Header/Cookie/Gin Context）
+	server.OnConnect(func(conn *ws.Conn, r *http.Request) {
 		conn.SetMeta("name", conn.ID()[:8])
-		log.Printf("[CONNECT] %s", conn.ID())
+		conn.SetMeta("remote_addr", r.RemoteAddr)
+		conn.SetMeta("user_agent", r.UserAgent())
+		log.Printf("[CONNECT] %s %s", conn.ID(), r.RemoteAddr)
 	})
 	server.OnDisconnect(func(conn *ws.Conn) {
 		log.Printf("[DISCONNECT] %s", conn.ID())

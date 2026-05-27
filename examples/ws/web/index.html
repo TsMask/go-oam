@@ -6,7 +6,7 @@
 <title>WebSocket 功能验证</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f0f2f5;min-height:100vh;display:flex;flex-direction:column}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f0f2f5;height:100vh;overflow:hidden;display:flex;flex-direction:column}
 .topbar{background:#1a1a2e;color:#fff;padding:12px 24px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
 .topbar h1{font-size:16px;font-weight:600;letter-spacing:.5px}
 .topbar .status{display:flex;align-items:center;gap:8px;font-size:13px}
@@ -19,8 +19,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .right{flex:1;display:flex;flex-direction:column;overflow:hidden}
 .panel{padding:16px;border-bottom:1px solid #f0f0f0}
 .panel-title{font-size:12px;font-weight:600;color:#999;text-transform:uppercase;margin-bottom:10px;letter-spacing:1px}
-input,textarea{width:100%;padding:8px 10px;border:1px solid #d9d9d9;border-radius:4px;font-size:13px;font-family:inherit}
-input:focus,textarea:focus{outline:none;border-color:#1890ff;box-shadow:0 0 0 2px rgba(24,144,255,.1)}
+input,textarea,select{width:100%;padding:8px 10px;border:1px solid #d9d9d9;border-radius:4px;font-size:13px;font-family:inherit}
+input:focus,textarea:focus,select:focus{outline:none;border-color:#1890ff;box-shadow:0 0 0 2px rgba(24,144,255,.1)}
 textarea{resize:vertical;min-height:60px;font-family:'Courier New',monospace}
 label{display:block;font-size:12px;color:#666;margin-bottom:4px}
 .btn{padding:6px 14px;border:none;border-radius:4px;font-size:12px;font-weight:500;cursor:pointer;transition:all .15s}
@@ -42,7 +42,7 @@ label{display:block;font-size:12px;color:#666;margin-bottom:4px}
 .stat{text-align:center}
 .stat-val{font-size:18px;font-weight:700;color:#1a1a2e}
 .stat-lbl{font-size:10px;color:#999;margin-top:2px}
-.log-area{flex:1;overflow-y:auto;padding:12px 16px;font-family:'Courier New',monospace;font-size:12px;line-height:1.7;background:#1e1e2e;color:#d4d4d4}
+.log-area{flex:1;overflow-y:auto;padding:12px 16px;font-family:'Courier New',monospace;font-size:12px;line-height:1.7;background:#1e1e2e;color:#d4d4d4;min-height:0}
 .log-area .row{padding:2px 0;word-break:break-all}
 .t-sys{color:#6a9955}
 .t-send{color:#569cd6}
@@ -53,6 +53,7 @@ label{display:block;font-size:12px;color:#666;margin-bottom:4px}
 .tag-send{background:#264f78;color:#569cd6}
 .tag-recv{background:#2d4a27;color:#6a9955}
 .tag-err{background:#5a1d1d;color:#f44747}
+.tag-pub{background:#4a3a0a;color:#dcdcaa}
 .tag-sys{background:#3a3a3a;color:#ccccb3}
 .tag-ok{background:#1e3a1e;color:#6a9955}
 .detail{color:#808080;margin-left:4px;font-size:11px}
@@ -66,9 +67,12 @@ label{display:block;font-size:12px;color:#666;margin-bottom:4px}
 
 <div class="topbar">
   <h1>WebSocket 功能验证</h1>
-  <div class="status">
-    <div class="dot" id="dot"></div>
-    <span id="statusText">未连接</span>
+  <div style="display:flex;align-items:center;gap:12px">
+    <div style="display:flex;align-items:center;gap:8px;font-size:13px">
+      <div class="dot" id="dot"></div>
+      <span id="statusText">未连接</span>
+    </div>
+    <button class="btn btn-ghost btn-sm" style="color:#ccc;border-color:#555" onclick="clearLog()">清空</button>
   </div>
 </div>
 
@@ -79,7 +83,7 @@ label{display:block;font-size:12px;color:#666;margin-bottom:4px}
     <div class="panel">
       <div class="panel-title">连接</div>
       <label>服务地址</label>
-      <input id="url" value="ws://localhost:9092/ws">
+      <input id="url" value="">
       <div class="btn-row">
         <button class="btn btn-green btn-sm" id="btnConn" onclick="doConnect()">连接</button>
         <button class="btn btn-red btn-sm" id="btnDisc" onclick="doDisconnect()" disabled>断开</button>
@@ -116,6 +120,27 @@ label{display:block;font-size:12px;color:#666;margin-bottom:4px}
     </div>
 
     <div class="panel">
+      <div class="panel-title">订阅</div>
+      <label>Topic（逗号分隔多个）</label>
+      <input id="subTopics" value="news,alerts">
+      <div class="btn-row">
+        <button class="btn btn-green btn-sm" onclick="doSubscribe()">订阅</button>
+        <button class="btn btn-red btn-sm" onclick="doUnsubscribe()">取消订阅</button>
+        <button class="btn btn-ghost btn-sm" onclick="send('topics')">查看 Topics</button>
+      </div>
+      <div class="mt">
+        <label>向 Topic 发布</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <input id="pubTopic" placeholder="topic 名称" value="news">
+          <input id="pubMsg" placeholder="消息内容" value="hello from pub">
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-pri btn-sm" onclick="doPublish()">发布</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
       <div class="panel-title">查找连接</div>
       <div style="display:flex;gap:6px">
         <input id="findId" placeholder="连接 ID">
@@ -134,16 +159,42 @@ label{display:block;font-size:12px;color:#666;margin-bottom:4px}
 
     <div class="panel">
       <div class="panel-title">性能测试</div>
-      <label>请求数</label>
-      <input id="perfCount" type="number" value="200" min="1" max="10000">
-      <div class="btn-row">
-        <button class="btn btn-pri btn-sm" onclick="perfTest()">开始测试</button>
-        <button class="btn btn-ghost btn-sm" onclick="resetStats()">重置</button>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        <div>
+          <label>请求数</label>
+          <input id="perfCount" type="number" value="500" min="10" max="10000">
+        </div>
+        <div>
+          <label>并发度</label>
+          <input id="perfConcurrency" type="number" value="20" min="1" max="200">
+        </div>
       </div>
-      <div class="perf-grid">
-        <div class="perf-box"><div class="perf-val" id="pQps">0</div><div class="perf-lbl">QPS</div></div>
-        <div class="perf-box"><div class="perf-val" id="pLat">0</div><div class="perf-lbl">延迟ms</div></div>
-        <div class="perf-box"><div class="perf-val" id="pRate">0%</div><div class="perf-lbl">成功率</div></div>
+      <div style="margin-top:6px">
+        <label>场景</label>
+        <select id="perfScene" style="width:100%;padding:6px 8px;border:1px solid #d9d9d9;border-radius:4px;font-size:12px">
+          <option value="echo">Echo 多样回显</option>
+          <option value="mixed">Mixed 混合操作</option>
+          <option value="large">Large 大包体</option>
+          <option value="stress">Stress 极限压力</option>
+        </select>
+      </div>
+      <div class="btn-row" style="margin-top:6px">
+        <button class="btn btn-pri btn-sm" id="btnPerf" onclick="perfTest()">开始测试</button>
+        <button class="btn btn-ghost btn-sm" onclick="resetPerf()">重置</button>
+      </div>
+      <div class="perf-grid" style="margin-top:8px">
+        <div class="perf-box"><div class="perf-val" id="pQps">-</div><div class="perf-lbl">QPS</div></div>
+        <div class="perf-box"><div class="perf-val" id="pAvg">-</div><div class="perf-lbl">AVG ms</div></div>
+        <div class="perf-box"><div class="perf-val" id="pP50">-</div><div class="perf-lbl">P50 ms</div></div>
+        <div class="perf-box"><div class="perf-val" id="pP95">-</div><div class="perf-lbl">P95 ms</div></div>
+        <div class="perf-box"><div class="perf-val" id="pP99">-</div><div class="perf-lbl">P99 ms</div></div>
+        <div class="perf-box"><div class="perf-val" id="pRate">-</div><div class="perf-lbl">成功率</div></div>
+        <div class="perf-box"><div class="perf-val" id="pMin">-</div><div class="perf-lbl">MIN ms</div></div>
+        <div class="perf-box"><div class="perf-val" id="pMax">-</div><div class="perf-lbl">MAX ms</div></div>
+        <div class="perf-box"><div class="perf-val" id="pTotal">-</div><div class="perf-lbl">耗时 ms</div></div>
+      </div>
+      <div id="perfBar" style="margin-top:6px;height:4px;background:#eee;border-radius:2px;overflow:hidden">
+        <div id="perfProgress" style="height:100%;width:0%;background:#1890ff;transition:width 0.2s"></div>
       </div>
     </div>
 
@@ -158,19 +209,23 @@ label{display:block;font-size:12px;color:#666;margin-bottom:4px}
       <div class="stat"><div class="stat-val" id="sErr">0</div><div class="stat-lbl">失败</div></div>
     </div>
     <div class="log-area" id="log"></div>
-    <div style="padding:8px 16px;background:#1e1e2e;border-top:1px solid #333;display:flex;justify-content:flex-end">
-      <button class="btn btn-ghost btn-sm" onclick="clearLog()">清空日志</button>
-    </div>
   </div>
 </div>
 
 <script>
-let ws = null, seq = 0;
-let stats = { sent:0, recv:0, ok:0, err:0, latencies:[], perfStart:0, perfDone:0, perfTotal:0 };
-let pending = new Map();
+// ============================================================================
+// 全局状态
+// ============================================================================
+let ws = null, seq = 0, sendSeq = 0;
+const pending = new Map(); // id -> { t, action }
+let stats = { sent:0, recv:0, ok:0, err:0 };
+let perfTracker = null; // 性能测试追踪器
 
 function $(id){ return document.getElementById(id) }
 
+// ============================================================================
+// 连接状态
+// ============================================================================
 function updateStatus(s){
   const dot = $('dot'), txt = $('statusText');
   dot.className = 'dot';
@@ -186,32 +241,52 @@ function updateStats(){
   $('sErr').textContent = stats.err;
 }
 
-function resetStats(){
-  stats = { sent:0, recv:0, ok:0, err:0, latencies:[], perfStart:0, perfDone:0, perfTotal:0 };
-  updateStats();
-  $('pQps').textContent='0'; $('pLat').textContent='0'; $('pRate').textContent='0%';
+function resetPerf(){
+  ['pQps','pAvg','pP50','pP95','pP99','pMin','pMax','pTotal'].forEach(id => $(id).textContent = '-');
+  $('pRate').textContent = '-';
+  $('perfProgress').style.width = '0%';
 }
 
+function clearLog(){
+  $('log').innerHTML = '';
+  stats = { sent:0, recv:0, ok:0, err:0 };
+  updateStats();
+}
+
+// ============================================================================
+// 日志
+// ============================================================================
 function log(tag, cls, msg, detail){
   const area = $('log');
   const i = area.children.length + 1;
-  let html = `<div class="row"><span class="t-idx">${String(i).padStart(3,'0')}</span><span class="t-tag tag-${cls}">${tag}</span><span class="t-${cls}">${msg}</span>`;
-  if(detail) html += `<span class="detail">${detail}</span>`;
+  let html = `<div class="row"><span class="t-idx">${String(i).padStart(3,'0')}</span><span class="t-tag tag-${cls}">${tag}</span><span class="t-${cls}">${escHtml(msg)}</span>`;
+  if(detail) html += `<span class="detail">${escHtml(detail)}</span>`;
   html += '</div>';
   area.insertAdjacentHTML('beforeend', html);
+  // 限制日志行数
+  while(area.children.length > 2000) area.removeChild(area.firstChild);
   area.scrollTop = area.scrollHeight;
 }
 
-function clearLog(){ $('log').innerHTML = '' }
+function escHtml(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ============================================================================
+// 连接管理
+// ============================================================================
+let reconnectTimer = null, reconnectDelay = 500, shouldReconnect = false;
 
 function doConnect(){
-  const url = $('url').value.trim();
-  if(!url) return;
+  let url = $('url').value.trim();
+  if(!url) url = 'ws://'+location.hostname+':9092/ws';
   updateStatus('wait');
-  log('SYS','sys',`正在连接 ${url}`);
+  log('SYS','sys','正在连接 '+url);
   ws = new WebSocket(url);
+  ws.binaryType = 'arraybuffer';
   ws.onopen = () => {
     updateStatus('on');
+    reconnectDelay = 500;
     $('btnConn').disabled = true;
     $('btnDisc').disabled = false;
     log('SYS','sys','连接成功');
@@ -222,39 +297,76 @@ function doConnect(){
     updateStatus('off');
     $('btnConn').disabled = false;
     $('btnDisc').disabled = true;
-    log('SYS','sys',`连接关闭 code=${e.code}`);
+    log('SYS','sys','连接关闭 code='+e.code);
+    if(shouldReconnect){
+      log('SYS','sys',reconnectDelay/1000+'s 后重连...');
+      reconnectTimer = setTimeout(() => doConnect(), reconnectDelay);
+      reconnectDelay = Math.min(reconnectDelay * 2, 5000);
+    }
   };
+  shouldReconnect = true;
 }
 
 function doDisconnect(){
+  shouldReconnect = false;
+  if(reconnectTimer){ clearTimeout(reconnectTimer); reconnectTimer = null; }
   if(ws){ ws.close(1000); ws = null; }
 }
 
+// ============================================================================
+// 消息发送
+// ============================================================================
 function send(action, data){
   if(!ws || ws.readyState !== 1){ log('ERR','err','未连接'); return; }
-  const id = crypto.randomUUID();
-  const body = data !== undefined ? (typeof data === 'string' ? data : JSON.stringify(data)) : '';
-  const payload = JSON.stringify({ id, action, data: body });
-  ws.send(payload);
+  const id = 'S-'+(++sendSeq)+'-'+Date.now();
+  let dataVal;
+  if(data !== undefined){
+    if(typeof data === 'string'){
+      try { dataVal = JSON.parse(data); } catch { dataVal = data; }
+    } else {
+      dataVal = data;
+    }
+  } else {
+    dataVal = '';
+  }
+  ws.send(JSON.stringify({ id, action, data: dataVal }));
   stats.sent++;
-  pending.set(id, { t: Date.now(), action });
+  pending.set(id, { t: performance.now(), action });
   updateStats();
-  log('REQ','send', action, body || null);
+  // 数据预览
+  let preview = dataVal !== '' && dataVal !== undefined ? String(typeof dataVal === 'object' ? JSON.stringify(dataVal) : dataVal) : '';
+  if(preview.length > 60) preview = preview.slice(0,60)+'...';
+  log('REQ','send', action, preview || null);
 }
 
+// ============================================================================
+// 消息接收（统一处理，包括性能测试响应）
+// ============================================================================
 function handleMsg(raw){
   stats.recv++;
   let resp;
-  try { resp = JSON.parse(raw) } catch(e){ log('ERR','err','JSON 解析失败', raw); stats.err++; updateStats(); return; }
+  try { resp = JSON.parse(raw) } catch(e){ log('ERR','err','JSON 解析失败 '+raw.slice(0,100)); stats.err++; updateStats(); return; }
 
-  // 匹配延迟
+  // 计算延迟
   let lat = '';
   if(resp.id && pending.has(resp.id)){
-    const p = pending.get(resp.id);
-    const ms = Date.now() - p.t;
-    stats.latencies.push(ms);
+    const ms = performance.now() - pending.get(resp.id).t;
     pending.delete(resp.id);
-    lat = `${ms}ms`;
+    lat = Math.round(ms*100)/100+'ms';
+  }
+
+  // 性能测试追踪
+  if(perfTracker && resp.id && perfTracker.pending.has(resp.id)){
+    const ms = performance.now() - perfTracker.pending.get(resp.id);
+    perfTracker.pending.delete(resp.id);
+    perfTracker.latencies.push(ms);
+    perfTracker.done++;
+    if(resp.code === 200 || resp.code === 0) perfTracker.ok++; else perfTracker.fail++;
+    $('perfProgress').style.width = (perfTracker.done / perfTracker.total * 100).toFixed(0)+'%';
+    if(perfTracker.done >= perfTracker.total) finishPerf();
+    // 性能测试期间不在日志区逐条输出，避免 DOM 性能影响
+    updateStats();
+    return;
   }
 
   if(resp.code === 200 || resp.code === 0){
@@ -262,41 +374,67 @@ function handleMsg(raw){
     let preview = '';
     if(resp.data){
       try{ preview = typeof resp.data === 'string' ? resp.data : JSON.stringify(resp.data) }catch{ preview = String(resp.data) }
-      if(preview.length > 200) preview = preview.slice(0,200) + '...';
+      if(preview.length > 200) preview = preview.slice(0,200)+'...';
     }
-    log('RSP','recv', `${resp.action} code=${resp.code}`, lat + (preview ? ' ' + preview : ''));
+    log('RSP','ok', resp.action+' code='+resp.code, lat+(preview?' '+preview:''));
   } else {
     stats.err++;
-    log('ERR','err', `${resp.action||'?'} code=${resp.code} msg=${resp.msg||''}`, lat);
+    log('ERR','err', (resp.action||'?')+' code='+resp.code+' msg='+(resp.msg||''), lat);
   }
 
-  // 广播通知单独显示
+  // 广播/推送通知
   if(resp.action === 'notification' || resp.action === 'targeted_msg'){
-    log('NTF','sys', `${resp.action}: ${resp.data || ''}`);
+    log('NTF','sys', resp.action+': '+(resp.data||''));
+  }
+
+  // 订阅推送（topic 名作为 action，非请求响应）
+  if(resp.id && !pending.has(resp.id) && !['notification','targeted_msg'].includes(resp.action)){
+    try {
+      const d = typeof resp.data === 'string' ? JSON.parse(resp.data) : resp.data;
+      if(d && d.topic) log('PUB','pub', '['+d.topic+'] '+(d.message||JSON.stringify(d)));
+    } catch(e){}
   }
 
   updateStats();
 }
 
-// 边界测试：超大消息
+// ============================================================================
+// 订阅/发布
+// ============================================================================
+function doSubscribe(){
+  const topics = $('subTopics').value.split(',').map(s=>s.trim()).filter(Boolean);
+  if(!topics.length){ log('ERR','err','请输入 topic'); return; }
+  send('subscribe', JSON.stringify({ topics }));
+}
+
+function doUnsubscribe(){
+  const topics = $('subTopics').value.split(',').map(s=>s.trim()).filter(Boolean);
+  if(!topics.length){ log('ERR','err','请输入 topic'); return; }
+  send('unsubscribe', JSON.stringify({ topics }));
+}
+
+function doPublish(){
+  const topic = $('pubTopic').value.trim();
+  const msg = $('pubMsg').value.trim();
+  if(!topic){ log('ERR','err','请输入 topic'); return; }
+  send('publish', JSON.stringify({ topic, message: msg }));
+}
+
+// ============================================================================
+// 边界测试
+// ============================================================================
 function testOversized(){
   if(!ws || ws.readyState !== 1){ log('ERR','err','未连接'); return; }
-  const big = 'x'.repeat(5000);
-  const id = crypto.randomUUID();
-  const payload = JSON.stringify({ id, action:'echo', data: big });
-  ws.send(payload);
+  const id = 'S-'+(++sendSeq)+'-'+Date.now();
+  ws.send(JSON.stringify({ id, action:'echo', data:'x'.repeat(5000) }));
   stats.sent++;
-  pending.set(id, { t: Date.now(), action:'echo' });
+  pending.set(id, { t: performance.now(), action:'echo' });
   updateStats();
   log('REQ','send','echo (5000 bytes, 超过 4KB 限制)', '应被服务端拒绝或截断');
 }
 
-// 边界测试：未知 action
-function testUnknownAction(){
-  send('nonexistent_action', 'test');
-}
+function testUnknownAction(){ send('nonexistent_action', 'test'); }
 
-// 边界测试：非法 JSON
 function testInvalidJSON(){
   if(!ws || ws.readyState !== 1){ log('ERR','err','未连接'); return; }
   ws.send('这不是JSON{{{');
@@ -305,65 +443,248 @@ function testInvalidJSON(){
   log('REQ','send','发送非法 JSON', '应被服务端拒绝');
 }
 
-// 性能测试
-function perfTest(){
-  if(!ws || ws.readyState !== 1){ log('ERR','err','未连接'); return; }
-  const count = parseInt($('perfCount').value) || 200;
-  stats.perfStart = Date.now();
-  stats.perfTotal = count;
-  stats.perfDone = 0;
-  stats.latencies = [];
-  log('SYS','sys',`性能测试开始 ${count} 条`);
+// ============================================================================
+// 性能测试 — 数据生成器
+// ============================================================================
 
-  let sent = 0;
-  const batchSize = Math.min(50, count);
-  const timer = setInterval(() => {
-    if(sent >= count){ clearInterval(timer); return; }
-    for(let i = 0; i < batchSize && sent < count; i++){
-      send('echo', `perf-${sent}`);
-      sent++;
-    }
-  }, 10);
-
-  // 监听完成
-  const check = setInterval(() => {
-    if(stats.perfDone >= count){
-      clearInterval(check);
-      const dur = Date.now() - stats.perfStart;
-      const qps = (count / (dur/1000)).toFixed(1);
-      const avg = stats.latencies.length ? Math.round(stats.latencies.reduce((a,b)=>a+b,0)/stats.latencies.length) : 0;
-      const rate = (stats.ok / (stats.ok + stats.err) * 100).toFixed(1);
-      $('pQps').textContent = qps;
-      $('pLat').textContent = avg;
-      $('pRate').textContent = rate + '%';
-      log('SYS','sys',`性能测试完成: ${dur}ms, QPS=${qps}, 延迟=${avg}ms, 成功率=${rate}%`);
-    }
-  }, 100);
-
-  // 追踪完成数
-  const origHandler = handleMsg;
-  const trackHandler = function(raw){
-    origHandler(raw);
-    stats.perfDone++;
-  };
-  // 简单追踪：用 interval 检查 recv 数量变化
-  let lastRecv = stats.recv;
-  const trackTimer = setInterval(() => {
-    if(stats.recv >= stats.perfStart_recv + count || Date.now() - stats.perfStart > 30000){
-      stats.perfDone = stats.perfTotal;
-      clearInterval(trackTimer);
-    }
-  }, 200);
-  stats.perfStart_recv = stats.recv;
-  setTimeout(() => { stats.perfDone = stats.perfTotal }, 30000); // 超时兜底
+// 随机字符串
+function randStr(len){
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let s = '';
+  for(let i = 0; i < len; i++) s += chars[Math.floor(Math.random()*chars.length)];
+  return s;
 }
 
-// 拦截 handleMsg 追踪性能完成数
+// 随机 JSON 对象（模拟真实业务数据）
+function randObj(sizeHint){
+  const types = ['user','event','metric','config','command'];
+  const t = types[Math.floor(Math.random()*types.length)];
+  const id = randStr(12);
+  const base = { req_id: id, type: t, ts: Date.now(), seq: Math.floor(Math.random()*100000) };
+  switch(t){
+    case 'user':
+      base.name = randStr(8);
+      base.email = randStr(6)+'@'+randStr(5)+'.com';
+      base.role = ['admin','viewer','editor'][Math.floor(Math.random()*3)];
+      base.tags = Array.from({length: Math.floor(Math.random()*5)+1}, () => randStr(4));
+      break;
+    case 'event':
+      base.source = randStr(6);
+      base.level = ['debug','info','warn','error'][Math.floor(Math.random()*4)];
+      base.message = randStr(Math.max(20, sizeHint - 120));
+      break;
+    case 'metric':
+      base.host = randStr(8);
+      base.cpu = Math.random()*100;
+      base.mem = Math.random()*100;
+      base.disk = Math.random()*100;
+      base.net = { in: Math.random()*1000, out: Math.random()*1000 };
+      base.labels = {};
+      for(let i = 0; i < Math.floor(Math.random()*5); i++) base.labels[randStr(4)] = randStr(6);
+      break;
+    case 'config':
+      base.key = randStr(10);
+      base.value = randStr(Math.max(10, sizeHint - 100));
+      base.version = Math.floor(Math.random()*100);
+      base.enabled = Math.random() > 0.5;
+      base.ttl = Math.floor(Math.random()*3600);
+      break;
+    case 'command':
+      base.cmd = randStr(8);
+      base.args = Array.from({length: Math.floor(Math.random()*4)}, () => randStr(6));
+      base.timeout = Math.floor(Math.random()*30)+1;
+      base.retry = Math.floor(Math.random()*3);
+      break;
+  }
+  return base;
+}
+
+// 随机 payload（混合类型：字符串、数字、对象、数组、null）
+function randPayload(sizeHint){
+  const kind = Math.random();
+  if(kind < 0.5){
+    // JSON 对象 — 最常见
+    return randObj(sizeHint);
+  } else if(kind < 0.7){
+    // 纯字符串
+    return randStr(sizeHint);
+  } else if(kind < 0.8){
+    // 数字
+    return Math.random() * 100000;
+  } else if(kind < 0.9){
+    // 数组
+    return Array.from({length: Math.floor(Math.random()*10)+1}, () => randStr(8));
+  } else {
+    // 嵌套对象
+    return { level1: { level2: { value: randStr(sizeHint/2), meta: randStr(20) }, items: Array.from({length:5}, ()=>randStr(6)) }};
+  }
+}
+
+// 场景定义
+const scenes = {
+  // Echo 多样回显：各种大小的随机 JSON、字符串
+  echo(i, total){
+    const sizes = [64, 128, 256, 512, 1024, 2048];
+    const size = sizes[Math.floor(Math.random()*sizes.length)];
+    return { action:'echo', data: randPayload(size) };
+  },
+  // Mixed 混合操作：不同 action + 不同数据
+  mixed(i, total){
+    const r = Math.random();
+    if(r < 0.45){
+      // echo 随机数据
+      const size = [64, 256, 1024][Math.floor(Math.random()*3)];
+      return { action:'echo', data: randPayload(size) };
+    } else if(r < 0.65){
+      return { action:'ping' };
+    } else if(r < 0.80){
+      return { action:'info' };
+    } else if(r < 0.92){
+      return { action:'list' };
+    } else {
+      // set_name 随机名称
+      return { action:'set_name', data: randStr(8) };
+    }
+  },
+  // Large 大包体：接近 4KB 限制
+  large(i, total){
+    const sizes = [2048, 3072, 3584, 3900];
+    const size = sizes[Math.floor(Math.random()*sizes.length)];
+    if(Math.random() < 0.5){
+      // 大 JSON 对象
+      return { action:'echo', data: randObj(size) };
+    } else {
+      // 大字符串
+      return { action:'echo', data: randStr(size) };
+    }
+  },
+  // Stress 极限压力：最小 payload，最大化吞吐
+  stress(i, total){
+    return { action:'echo', data: i };
+  }
+};
+
+// ============================================================================
+// 性能测试 — 核心逻辑
+// ============================================================================
+function perfTest(){
+  if(!ws || ws.readyState !== 1){ log('ERR','err','未连接'); return; }
+  if(perfTracker){ log('SYS','sys','测试进行中'); return; }
+
+  const total = Math.max(10, parseInt($('perfCount').value) || 500);
+  const concurrency = Math.max(1, parseInt($('perfConcurrency').value) || 20);
+  const scene = $('perfScene').value;
+  const gen = scenes[scene] || scenes.echo;
+
+  log('SYS','sys',`性能测试 [${scene}] ${total} 条 并发度=${concurrency}`);
+
+  // 重置显示
+  resetPerf();
+  $('perfProgress').style.width = '0%';
+  $('btnPerf').disabled = true;
+
+  // 预生成所有请求数据
+  const requests = [];
+  for(let i = 0; i < total; i++){
+    const r = gen(i, total);
+    const id = 'PF-'+(++sendSeq)+'-'+i+'-'+Date.now();
+    requests.push({ id, action: r.action, data: r.data !== undefined ? r.data : '' });
+  }
+
+  // 初始化追踪器
+  const t0 = performance.now();
+  perfTracker = {
+    pending: new Map(),
+    latencies: [],
+    done: 0,
+    ok: 0,
+    fail: 0,
+    total,
+    t0,
+    concurrency,
+    scene,
+  };
+
+  // 并发控制：维护 in-flight 数量不超过 concurrency
+  let nextIdx = 0;
+
+  function sendNext(){
+    while(nextIdx < total && perfTracker.pending.size < concurrency){
+      const req = requests[nextIdx];
+      perfTracker.pending.set(req.id, performance.now());
+      ws.send(JSON.stringify(req));
+      stats.sent++;
+      nextIdx++;
+    }
+  }
+
+  // 先发送首批
+  sendNext();
+
+  // 定期补充发送（响应回来后空出位子）
+  perfTracker.sendNext = sendNext;
+
+  // 超时保护
+  perfTracker.timeoutId = setTimeout(() => {
+    if(perfTracker && perfTracker.done < total){
+      log('ERR','err',`性能测试超时，完成 ${perfTracker.done}/${total}`);
+      finishPerf();
+    }
+  }, 60000);
+}
+
+// 响应回来时补充发送 — 在 handleMsg 中已经处理 perfTracker.done++
+// 需要在每次响应后调用 sendNext
 const _origHandleMsg = handleMsg;
 handleMsg = function(raw){
   _origHandleMsg(raw);
-  if(stats.perfTotal > 0) stats.perfDone++;
+  if(perfTracker && perfTracker.sendNext) perfTracker.sendNext();
 };
+
+function finishPerf(){
+  if(!perfTracker) return;
+  const pt = perfTracker;
+  perfTracker = null; // 先清空，防止重入
+  $('btnPerf').disabled = false;
+
+  clearTimeout(pt.timeoutId);
+
+  const dur = performance.now() - pt.t0;
+  const lats = pt.latencies;
+  const completed = lats.length;
+
+  if(completed === 0){
+    log('ERR','err','无有效响应');
+    return;
+  }
+
+  lats.sort((a,b) => a - b);
+
+  const sum = lats.reduce((a,b) => a+b, 0);
+  const avg = sum / completed;
+  const p50 = lats[Math.floor(completed * 0.50)];
+  const p95 = lats[Math.floor(completed * 0.95)];
+  const p99 = lats[Math.min(completed - 1, Math.floor(completed * 0.99))];
+  const mn = lats[0];
+  const mx = lats[completed - 1];
+  const qps = (completed / (dur / 1000)).toFixed(1);
+  const rate = (pt.ok / pt.total * 100).toFixed(1);
+
+  $('pQps').textContent = qps;
+  $('pAvg').textContent = avg.toFixed(2);
+  $('pP50').textContent = p50.toFixed(2);
+  $('pP95').textContent = p95.toFixed(2);
+  $('pP99').textContent = p99.toFixed(2);
+  $('pMin').textContent = mn.toFixed(2);
+  $('pMax').textContent = mx.toFixed(2);
+  $('pTotal').textContent = Math.round(dur);
+  $('pRate').textContent = rate+'%';
+  $('perfProgress').style.width = '100%';
+
+  log('SYS','sys',
+    `[${pt.scene}] 完成 ${completed}/${pt.total} | QPS=${qps} AVG=${avg.toFixed(1)}ms P50=${p50.toFixed(1)} P95=${p95.toFixed(1)} P99=${p99.toFixed(1)} 成功率=${rate}% 耗时=${Math.round(dur)}ms`
+  );
+}
 
 // Ctrl+Enter 发送 echo
 document.addEventListener('keydown', e => {

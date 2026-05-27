@@ -1,11 +1,11 @@
 package codec
 
 import (
-	msgpack "github.com/vmihailenco/msgpack/v5"
 	"github.com/tsmask/go-oam/ws/types"
+	msgpack "github.com/vmihailenco/msgpack/v5"
 )
 
-// MsgPackCodec MessagePack 编解码器
+// msgpackCodec MessagePack 编解码器
 // 使用 vmihailenco/msgpack 进行序列化
 //
 // 特点：
@@ -14,45 +14,36 @@ import (
 //   - 跨语言兼容性好
 //
 // 适用场景：高性能通信、游戏后端
-type MsgPackCodec struct{}
-
-// NewMsgPackCodec 创建 MessagePack 编解码器
-func NewMsgPackCodec() Codec {
-	return &MsgPackCodec{}
-}
+type msgpackCodec struct{}
 
 // Marshal 实现 Codec 接口
-func (c *MsgPackCodec) Marshal(v any) ([]byte, error) {
+func (c *msgpackCodec) Marshal(v any) ([]byte, error) {
 	return msgpack.Marshal(v)
 }
 
 // Unmarshal 实现 Codec 接口
-func (c *MsgPackCodec) Unmarshal(data []byte, v any) error {
+func (c *msgpackCodec) Unmarshal(data []byte, v any) error {
 	return msgpack.Unmarshal(data, v)
 }
 
 // Name 实现 Codec 接口
-func (c *MsgPackCodec) Name() string {
-	return "msgpack"
-}
+func (c *msgpackCodec) Name() string { return "msgpack" }
 
 // MessageType 实现 Codec 接口，返回 BinaryMessage
-func (c *MsgPackCodec) MessageType() int {
-	return BinaryMessage
-}
+func (c *msgpackCodec) MessageType() int { return BinaryMessage }
 
 // MarshalRequest 实现 Codec 接口
-func (c *MsgPackCodec) MarshalRequest(req *types.Request) ([]byte, error) {
+func (c *msgpackCodec) MarshalRequest(req *types.Request) ([]byte, error) {
 	return msgpack.Marshal(req)
 }
 
 // MarshalResponse 实现 Codec 接口
-func (c *MsgPackCodec) MarshalResponse(resp *types.Response) ([]byte, error) {
+func (c *msgpackCodec) MarshalResponse(resp *types.Response) ([]byte, error) {
 	return msgpack.Marshal(resp)
 }
 
 // UnmarshalRequest 实现 Codec 接口
-func (c *MsgPackCodec) UnmarshalRequest(data []byte) (*types.Request, error) {
+func (c *msgpackCodec) UnmarshalRequest(data []byte) (*types.Request, error) {
 	req := &types.Request{}
 	if err := msgpack.Unmarshal(data, req); err != nil {
 		return nil, err
@@ -61,7 +52,7 @@ func (c *MsgPackCodec) UnmarshalRequest(data []byte) (*types.Request, error) {
 }
 
 // UnmarshalResponse 实现 Codec 接口
-func (c *MsgPackCodec) UnmarshalResponse(data []byte) (*types.Response, error) {
+func (c *msgpackCodec) UnmarshalResponse(data []byte) (*types.Response, error) {
 	resp := &types.Response{}
 	if err := msgpack.Unmarshal(data, resp); err != nil {
 		return nil, err

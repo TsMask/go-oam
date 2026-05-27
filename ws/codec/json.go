@@ -6,7 +6,7 @@ import (
 	"github.com/tsmask/go-oam/ws/types"
 )
 
-// JSONCodec JSON 编解码器
+// jsonCodec JSON 编解码器
 // 使用标准库 encoding/json 进行序列化
 //
 // 特点：
@@ -15,51 +15,48 @@ import (
 //   - 性能一般，体积较大
 //
 // 适用场景：开发调试、跨语言通信
-type JSONCodec struct{}
-
-// NewJSONCodec 创建 JSON 编解码器
-func NewJSONCodec() Codec {
-	return &JSONCodec{}
-}
+type jsonCodec struct{}
 
 // Marshal 实现 Codec 接口
-func (c *JSONCodec) Marshal(v any) ([]byte, error) {
+func (c *jsonCodec) Marshal(v any) ([]byte, error) {
 	return json.Marshal(v)
 }
 
 // Unmarshal 实现 Codec 接口
-func (c *JSONCodec) Unmarshal(data []byte, v any) error {
+func (c *jsonCodec) Unmarshal(data []byte, v any) error {
 	return json.Unmarshal(data, v)
 }
 
 // Name 实现 Codec 接口
-func (c *JSONCodec) Name() string {
-	return "json"
-}
+func (c *jsonCodec) Name() string { return "json" }
 
 // MessageType 实现 Codec 接口，返回 TextMessage
-func (c *JSONCodec) MessageType() int {
-	return TextMessage
-}
+func (c *jsonCodec) MessageType() int { return TextMessage }
 
 // MarshalRequest 实现 Codec 接口
-func (c *JSONCodec) MarshalRequest(req *types.Request) ([]byte, error) {
+func (c *jsonCodec) MarshalRequest(req *types.Request) ([]byte, error) {
 	return json.Marshal(req)
 }
 
 // MarshalResponse 实现 Codec 接口
-func (c *JSONCodec) MarshalResponse(resp *types.Response) ([]byte, error) {
+func (c *jsonCodec) MarshalResponse(resp *types.Response) ([]byte, error) {
 	return json.Marshal(resp)
 }
 
 // UnmarshalRequest 实现 Codec 接口
-func (c *JSONCodec) UnmarshalRequest(data []byte) (*types.Request, error) {
+func (c *jsonCodec) UnmarshalRequest(data []byte) (*types.Request, error) {
 	req := &types.Request{}
-	return req, json.Unmarshal(data, req)
+	if err := json.Unmarshal(data, req); err != nil {
+		return nil, err
+	}
+	return req, nil
 }
 
 // UnmarshalResponse 实现 Codec 接口
-func (c *JSONCodec) UnmarshalResponse(data []byte) (*types.Response, error) {
+func (c *jsonCodec) UnmarshalResponse(data []byte) (*types.Response, error) {
 	resp := &types.Response{}
-	return resp, json.Unmarshal(data, resp)
+	if err := json.Unmarshal(data, resp); err != nil {
+		return nil, err
+	}
+	return resp, nil
 }

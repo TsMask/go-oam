@@ -2,25 +2,28 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	ws "github.com/tsmask/go-oam/ws"
 )
 
+// go run main.go
 func main() {
-	// 创建客户端 — 使用全部配置项
+	// 创建客户端 — 默认 JSON 编解码，与服务端匹配
 	client := ws.NewClient("ws://localhost:9092/ws",
-		ws.NewJSONCodec(),
-		ws.WithClientSendBufferSize(2000),           // 发送队列大小
-		ws.WithClientDialTimeout(10*time.Second),     // 连接超时
-		ws.WithClientRequestTimeout(30*time.Second),  // 请求超时
-		ws.WithClientMaxPendingRequests(5000),         // 最大 pending 数
-		ws.WithClientAutoReconnect(true),              // 自动重连
-		ws.WithClientMaxReconnectAttempts(5),          // 最大重连次数
+		ws.WithClientCodec("protobuf"),
+		ws.WithClientDialTimeout(10*time.Second),
+		ws.WithClientAutoReconnect(false),
+		ws.WithClientHeartbeat(15*time.Second),
 	)
+
+	var recvCount atomic.Int64
+	var wg sync.WaitGroup
 
 	// 状态回调
 	client.OnState(func(state ws.State) {
@@ -32,76 +35,91 @@ func main() {
 		log.Printf("错误: %v", err)
 	})
 
-	// 响应回调
+	// 响应回调 — 所有响应异步到达，按 ID 匹配请求
 	client.OnReceive(func(resp *ws.Response) {
-		log.Printf("响应: id=%s code=%d", resp.ID, resp.Code)
+		recvCount.Add(1)
+		dataStr := ""
+		if resp.Data != nil {
+			dataStr = string(resp.Data)
+			if len(dataStr) > 80 {
+				dataStr = dataStr[:80] + "..."
+			}
+		}
+		log.Printf("[收到] id=%s action=%s code=%d data=%s", resp.ID, resp.Action, resp.Code, dataStr)
+		wg.Done()
 	})
 
 	// 连接
-	ctx := context.Background()
-	if err := client.Connect(ctx); err != nil {
+	if err := client.Connect(context.Background()); err != nil {
 		log.Fatalf("连接失败: %v", err)
 	}
 	defer client.Close()
 
 	log.Printf("客户端连接成功，状态: %s", client.State())
 
-	// 同步请求
-	resp, err := client.Send(ctx, &ws.Request{
-		Action: "echo",
-		Data:   []byte(`{"msg":"hello"}`),
-	})
-	if err != nil {
-		log.Printf("同步请求失败: %v", err)
-	} else {
-		log.Printf("同步响应: id=%s code=%d data=%s", resp.ID, resp.Code, resp.Data)
+	// === 基础测试 ===
+	log.Println("=== 基础测试 ===")
+	wg.Add(3)
+
+	client.Send(&ws.Request{Action: "echo", Data: json.RawMessage(`"hello"`)})
+	client.Send(&ws.Request{Action: "ping"})
+	client.Send(&ws.Request{Action: "info"})
+
+	// 等待基础测试响应
+	if waitWithTimeout(&wg, 5*time.Second) {
+		log.Println("基础测试响应超时")
 	}
+	log.Printf("基础测试完成，收到 %d 条响应\n", recvCount.Load())
 
-	// 带超时的请求
-	resp, err = client.SendWithTimeout(&ws.Request{
-		Action: "ping",
-	}, 5*time.Second)
-	if err != nil {
-		log.Printf("超时请求失败: %v", err)
-	} else {
-		log.Printf("超时响应: id=%s code=%d data=%s", resp.ID, resp.Code, resp.Data)
-	}
+	// === 并发性能测试 ===
+	log.Println("=== 并发性能测试 ===")
+	recvCount.Store(0)
 
-	// 异步请求
-	client.SendAsync(ctx, &ws.Request{
-		Action: "echo",
-		Data:   []byte(`{"msg":"async"}`),
-	}, func(resp *ws.Response, err error) {
-		if err != nil {
-			log.Printf("异步请求失败: %v", err)
-		} else {
-			log.Printf("异步响应: id=%s code=%d data=%s", resp.ID, resp.Code, resp.Data)
-		}
-	})
+	total := 10
+	wg.Add(total)
 
-	// 并发性能测试
-	log.Println("开始并发性能测试...")
-	success := atomic.Int64{}
-	failed := atomic.Int64{}
+	var sendOk, sendFail atomic.Int64
 	start := time.Now()
 
-	for i := 0; i < 100; i++ {
+	for i := 0; i < total; i++ {
 		go func(seq int) {
-			_, err := client.Send(ctx, &ws.Request{
+			err := client.Send(&ws.Request{
 				Action: "echo",
-				Data:   []byte(fmt.Sprintf("ping-%d", seq)),
+				Data:   json.RawMessage(fmt.Sprintf(`{"seq":%d,"msg":"perf-%d"}`, seq, seq)),
 			})
 			if err != nil {
-				failed.Add(1)
+				sendFail.Add(1)
+				wg.Done() // 发送失败也要 Done，否则永远等不到
 			} else {
-				success.Add(1)
+				sendOk.Add(1)
 			}
 		}(i)
 	}
 
-	time.Sleep(5 * time.Second)
-	duration := time.Since(start)
+	// 等待所有响应到达（发送 + 接收 的完整往返）
+	if waitWithTimeout(&wg, 30*time.Second) {
+		log.Printf("性能测试超时，已收到 %d/%d 条响应", recvCount.Load(), total)
+	}
 
-	log.Printf("测试完成: 成功=%d 失败=%d 耗时=%v", success.Load(), failed.Load(), duration)
-	log.Printf("QPS: %.2f", float64(success.Load())/duration.Seconds())
+	duration := time.Since(start)
+	success := recvCount.Load()
+	qps := float64(success) / duration.Seconds()
+	log.Printf("性能测试完成: 发送成功=%d 失败=%d 响应=%d 耗时=%v QPS=%.1f",
+		sendOk.Load(), sendFail.Load(), success, duration.Round(time.Millisecond), qps)
+}
+
+// waitWithTimeout 等待 WaitGroup 完成或超时
+// 返回 true 表示超时
+func waitWithTimeout(wg *sync.WaitGroup, timeout time.Duration) bool {
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return false
+	case <-time.After(timeout):
+		return true
+	}
 }
