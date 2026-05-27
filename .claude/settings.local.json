@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go build *)",
+      "Bash(go test *)",
+      "Bash(go fmt *)",
+      "Bash(go mod *)",
+      "Bash(go vet *)"
+    ]
+  },
+  "spinnerTipsEnabled": false
+}
