@@ -1,6 +1,7 @@
 package push
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/tsmask/go-oam/push/client"
@@ -29,11 +30,12 @@ const DefaultPushURI = "/api/push/receive"
 //	    RecordData: map[string]any{"level": "critical", "message": "CPU overload"},
 //	}
 type Record struct {
-	CoreUID    string `json:"core_uid,omitempty"`    // Core network ID
-	NeUID      string `json:"ne_uid,omitempty"`      // Network element ID
-	RecordTime int64  `json:"record_time,omitempty"` // Record time (UTC milliseconds)
-	RecordType string `json:"record_type,omitempty"` // Record type identifier
-	RecordData any    `json:"record_data,omitempty"` // Record data payload
+	CoreUID    string            `json:"core_uid,omitempty"`    // Core network ID
+	NeUID      string            `json:"ne_uid,omitempty"`      // Network element ID
+	RecordTime int64             `json:"record_time,omitempty"` // Record time (UTC milliseconds)
+	RecordType string            `json:"record_type,omitempty"` // Record type identifier
+	RecordData json.RawMessage   `json:"record_data,omitempty"` // Record data payload
+	Params     map[string]string `json:"params,omitempty"`      // Additional parameters
 }
 
 // SendParams defines parameters for Send and SendAsync operations.
