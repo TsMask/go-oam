@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"sync"
@@ -26,10 +27,11 @@ type Options struct {
 
 // FileUpload 文件上传项
 type FileUpload struct {
-	Field string  // 表单字段名
-	Path  string  // 文件绝对路径（与 Data 二选一）
-	Data  *[]byte // 文件数据（优先级高于 Path）
-	Name  string  // 文件名（使用 Data 时必填，缺省取 Field）
+	Field  string    // 表单字段名
+	Reader io.Reader // 文件数据流，优先使用，适合大文件（与 Data/Path 三选一）
+	Path   string    // 文件绝对路径
+	Data   *[]byte   // 文件数据（优先级高于 Path，低于 Reader）
+	Name   string    // 文件名（使用 Reader/Data 时必填，缺省取 Field）
 }
 
 // 全局复用 Client（无源 IP 绑定）
@@ -106,14 +108,16 @@ func build(opts Options) *resty.Request {
 		req.SetFormData(opts.Form)
 	}
 
-	// 文件上传：Data 优先于 Path
+	// 文件上传：Reader > Data > Path
 	for i := range opts.Files {
 		f := &opts.Files[i]
-		if f.Data != nil && len(*f.Data) > 0 {
-			name := f.Name
-			if name == "" {
-				name = f.Field
-			}
+		name := f.Name
+		if name == "" {
+			name = f.Field
+		}
+		if f.Reader != nil {
+			req.SetFileReader(f.Field, name, f.Reader)
+		} else if f.Data != nil && len(*f.Data) > 0 {
 			req.SetFileReader(f.Field, name, bytes.NewReader(*f.Data))
 		} else if f.Path != "" {
 			req.SetFile(f.Field, f.Path)

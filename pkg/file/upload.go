@@ -44,35 +44,49 @@ func (c FileConfig) maxSizeBytes() int64 {
 // ==================== 上传对象 ====================
 
 // FileUpload 文件上传对象。
-// 单文件上传：设置 Name + Data，调用 Save。
-// 分片上传：设置 Id + Index + Data，调用 ChunkSave。
+// 单文件上传：设置 Name + (Reader 或 Data)，调用 Save。
+// 分片上传：设置 Id + Index + (Reader 或 Data)，调用 ChunkSave。
+// Reader 优先于 Data，适合大文件流式上传，内存占用恒定。
 type FileUpload struct {
-	Name  string  // 文件名（单文件上传时必填）
-	Data  *[]byte // 文件数据，由调用方通过 io.ReadAll 读取后传入
-	Id    string  // 分片标识，同一文件的所有分片共享（分片上传时必填）
-	Index string  // 分片序号，从 "0" 开始递增（分片上传时必填）
+	Name   string    // 文件名（单文件上传时必填）
+	Reader io.Reader // 文件数据流，优先使用，适合大文件（与 Data 二选一）
+	Data   *[]byte   // 文件数据，由调用方通过 io.ReadAll 读取后传入（小文件场景）
+	Id     string    // 分片标识，同一文件的所有分片共享（分片上传时必填）
+	Index  string    // 分片序号，从 "0" 开始递增（分片上传时必填）
 }
 
 // Save 校验并保存单文件，返回存储路径。
 // 校验内容：文件名长度、文件大小、扩展名白名单。
+// Reader 优先：流式写入临时文件，超过限制自动清理；Data 模式全量写入。
 func (u FileUpload) Save(cfg FileConfig) (string, error) {
-	data := *u.Data
-	if err := checkUpload(cfg, u.Name, int64(len(data))); err != nil {
+	if err := checkNameAndExt(cfg, u.Name); err != nil {
 		return "", err
 	}
 	dst := genPath(cfg.Dir, u.Name)
+	if u.Reader != nil {
+		return dst, streamToPath(dst, u.Reader, cfg.maxSizeBytes())
+	}
+	data := *u.Data
+	if err := checkSize(int64(len(data)), cfg.maxSizeBytes()); err != nil {
+		return "", err
+	}
 	return dst, writeBytes(dst, data)
 }
 
 // ChunkSave 校验并保存分片数据，存储为 {dir}/{id}/{index}。
 // 校验内容：分片大小不超过 MaxSize。
+// Reader 优先：流式写入临时文件，超过限制自动清理；Data 模式全量写入。
 func (u FileUpload) ChunkSave(cfg FileConfig) error {
+	dst := filepath.Join(cfg.Dir, u.Id, u.Index)
+	if u.Reader != nil {
+		return streamToPath(dst, u.Reader, cfg.maxSizeBytes())
+	}
 	data := *u.Data
 	limit := cfg.maxSizeBytes()
 	if int64(len(data)) > limit {
 		return fmt.Errorf("chunk size %d exceeds limit %d", len(data), limit)
 	}
-	return writeBytes(filepath.Join(cfg.Dir, u.Id, u.Index), data)
+	return writeBytes(dst, data)
 }
 
 // ChunkList 查询已上传的分片文件名列表（按文件名排序）。
@@ -141,11 +155,16 @@ var reIllegal = regexp.MustCompile(`[\\/:*?"<>|\s]+`)
 
 // checkUpload 校验上传约束：文件名长度、文件大小、扩展名白名单
 func checkUpload(cfg FileConfig, name string, size int64) error {
+	if err := checkNameAndExt(cfg, name); err != nil {
+		return err
+	}
+	return checkSize(size, cfg.maxSizeBytes())
+}
+
+// checkNameAndExt 校验文件名长度和扩展名白名单
+func checkNameAndExt(cfg FileConfig, name string) error {
 	if len(name) > cfg.maxNameLen() {
 		return fmt.Errorf("file name length exceeds %d characters", cfg.maxNameLen())
-	}
-	if size > cfg.maxSizeBytes() {
-		return fmt.Errorf("file size %d bytes exceeds limit %d bytes", size, cfg.maxSizeBytes())
 	}
 	if len(cfg.WhiteExts) > 0 {
 		ext := strings.ToLower(filepath.Ext(name))
@@ -154,6 +173,38 @@ func checkUpload(cfg FileConfig, name string, size int64) error {
 		}
 	}
 	return nil
+}
+
+// checkSize 校验文件大小是否超限
+func checkSize(size, limit int64) error {
+	if size > limit {
+		return fmt.Errorf("file size %d bytes exceeds limit %d bytes", size, limit)
+	}
+	return nil
+}
+
+// streamToPath 从 Reader 流式写入目标路径，超过 limit 字节则报错并清理临时文件。
+// 使用临时文件 + rename 保证原子性。
+func streamToPath(dst string, src io.Reader, limit int64) error {
+	if err := os.MkdirAll(filepath.Dir(dst), 0775); err != nil {
+		return err
+	}
+	tmp := dst + ".tmp"
+	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return err
+	}
+	n, err := io.Copy(f, io.LimitReader(src, limit+1))
+	if closeErr := f.Close(); err == nil {
+		if err = closeErr; err == nil && n > limit {
+			err = fmt.Errorf("file size exceeds limit %d bytes", limit)
+		}
+	}
+	if err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return os.Rename(tmp, dst)
 }
 
 // genPath 生成存储路径：{dir}/{清理名}_{随机码}.{ext}
