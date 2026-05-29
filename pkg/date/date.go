@@ -12,7 +12,7 @@ func ParseStrToDate(dateStr, formatStr string) time.Time {
 	if formatStr == "" {
 		formatStr = time.DateTime
 	}
-	t, err := time.Parse(formatStr, dateStr)
+	t, err := time.ParseInLocation(formatStr, dateStr, time.Local)
 	if err != nil {
 		return time.Time{}
 	}

@@ -1,6 +1,7 @@
 package state
 
 import (
+	"time"
 	"runtime"
 	"strings"
 
@@ -23,7 +24,7 @@ func SystemCPU() CPU {
 		result.Model = strings.TrimSpace(cpuInfo[0].ModelName)
 		result.Speed = cpuInfo[0].Mhz
 	}
-	cpuPercent, err := cpu.Percent(0, true)
+	cpuPercent, err := cpu.Percent(200*time.Millisecond, true)
 	if err == nil {
 		result.CoreUsed = cpuPercent
 	}

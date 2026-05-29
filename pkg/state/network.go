@@ -1,9 +1,6 @@
 package state
 
-import (
-	goNet "net"
-	"strings"
-)
+import "net"
 
 // NetIface 网络接口信息
 type NetIface struct {
@@ -12,25 +9,17 @@ type NetIface struct {
 	IPv6 []string `json:"ipv6"` // IPv6 地址列表
 }
 
-// shouldSkipIface 判断是否跳过该接口（回环、链路本地、虚拟接口）。
-func shouldSkipIface(iface goNet.Interface) bool {
-	if iface.Flags&goNet.FlagLoopback != 0 {
-		return true
-	}
-	name := iface.Name
-	return strings.HasPrefix(name, "veth") || strings.HasPrefix(name, "docker")
-}
-
-// parseIfaceIPs 从网卡地址列表中提取并分类 IPv4/IPv6，过滤链路本地地址。
-func parseIfaceIPs(addrs []goNet.Addr) (ipv4 []string, ipv6 []string) {
+// parseIfaceIPs 从网卡地址列表中提取并分类 IPv4/IPv6。
+func parseIfaceIPs(addrs []net.Addr) (ipv4 []string, ipv6 []string) {
 	for _, addr := range addrs {
-		ip, _, err := goNet.ParseCIDR(addr.String())
+		ip, _, err := net.ParseCIDR(addr.String())
 		if err != nil {
 			continue
 		}
-		if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
-			continue
-		}
+		// 过滤链路本地地址
+		// if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+		// 	continue
+		// }
 		ipStr := ip.String()
 		if ip.To4() != nil {
 			ipv4 = append(ipv4, ipStr)
@@ -42,15 +31,15 @@ func parseIfaceIPs(addrs []goNet.Addr) (ipv4 []string, ipv6 []string) {
 }
 
 // GetSystemNetwork 获取各网卡的 IPv4/IPv6 地址。
-// 跳过回环、链路本地和虚拟接口（veth、docker）。
+// 跳过回环接口和无地址的接口。返回接口名称及对应的 IP 列表。
 func SystemNetwork() []NetIface {
-	ifaces, err := goNet.Interfaces()
+	ifaces, err := net.Interfaces()
 	if err != nil {
 		return nil
 	}
 	result := make([]NetIface, 0, len(ifaces))
 	for _, iface := range ifaces {
-		if shouldSkipIface(iface) {
+		if iface.Flags&net.FlagLoopback != 0 {
 			continue
 		}
 		addrs, err := iface.Addrs()
@@ -73,12 +62,12 @@ func SystemNetwork() []NetIface {
 // 每个节点包含 id（索引）、label（接口名）、mac（物理地址）及 addrs（IP 列表）。
 func NetworkDevices() []map[string]any {
 	arr := make([]map[string]any, 0)
-	ifaces, err := goNet.Interfaces()
+	ifaces, err := net.Interfaces()
 	if err != nil {
 		return arr
 	}
 	for _, iface := range ifaces {
-		if iface.Flags&goNet.FlagLoopback != 0 {
+		if iface.Flags&net.FlagLoopback != 0 {
 			continue
 		}
 		addrs, err := iface.Addrs()

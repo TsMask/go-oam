@@ -120,7 +120,7 @@ func StateProcUsage(pid int32) (CpuUsage, MemUsage) {
 	}
 
 	// 系统级
-	sysCpuPercents, err := cpu.Percent(0, false)
+	sysCpuPercents, err := cpu.Percent(200*time.Millisecond, false)
 	if err == nil && len(sysCpuPercents) > 0 {
 		cpuUsage.SysCpuUsage = sysCpuPercents[0]
 	}
