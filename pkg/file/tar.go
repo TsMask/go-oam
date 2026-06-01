@@ -144,9 +144,15 @@ func tarUnpackReader(r io.Reader, dirPath string) error {
 			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
 				return err
 			}
-			if err := copyToFile(target, tr, buf); err != nil {
+			dst, createErr := os.Create(target)
+			if createErr != nil {
+				return createErr
+			}
+			if _, err := io.CopyBuffer(dst, tr, buf); err != nil {
+				dst.Close()
 				return err
 			}
+			dst.Close()
 		}
 	}
 }

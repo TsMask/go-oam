@@ -140,7 +140,13 @@ func ZipUnpack(zipPath, dirPath string) error {
 			return err
 		}
 
-		err = copyToFile(target, rc, buf)
+		dst, createErr := os.Create(target)
+		if createErr != nil {
+			rc.Close()
+			return createErr
+		}
+		_, err = io.CopyBuffer(dst, rc, buf)
+		dst.Close()
 		rc.Close()
 		if err != nil {
 			return err

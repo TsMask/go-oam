@@ -67,8 +67,9 @@ func (u FileUpload) Save(cfg FileConfig) (string, error) {
 		return dst, streamToPath(dst, u.Reader, cfg.maxSizeBytes())
 	}
 	data := *u.Data
-	if err := checkSize(int64(len(data)), cfg.maxSizeBytes()); err != nil {
-		return "", err
+	limit := cfg.maxSizeBytes()
+	if int64(len(data)) > limit {
+		return "", fmt.Errorf("file size %d bytes exceeds limit %d bytes", len(data), limit)
 	}
 	return dst, writeBytes(dst, data)
 }
@@ -153,12 +154,17 @@ func ReadStream(filePath string, start, end int64) (FileRange, error) {
 // reIllegal 非法文件名字符 + 空白，统一替换为 * 号
 var reIllegal = regexp.MustCompile(`[\\/:*?"<>|\s]+`)
 
-// checkUpload 校验上传约束：文件名长度、文件大小、扩展名白名单
-func checkUpload(cfg FileConfig, name string, size int64) error {
-	if err := checkNameAndExt(cfg, name); err != nil {
-		return err
+// genPath 生成存储路径：{dir}/{清理名}_{随机码}.{ext}
+// 非法字符和空格替换为 *，首尾 * 去除
+func genPath(dir, fileName string) string {
+	ext := filepath.Ext(fileName)
+	base := strings.TrimSuffix(fileName, ext)
+	base = reIllegal.ReplaceAllString(base, "*")
+	base = strings.Trim(base, "*")
+	if base == "" {
+		base = "file"
 	}
-	return checkSize(size, cfg.maxSizeBytes())
+	return filepath.Join(dir, base+"_"+generate.Code(6)+ext)
 }
 
 // checkNameAndExt 校验文件名长度和扩展名白名单
@@ -171,14 +177,6 @@ func checkNameAndExt(cfg FileConfig, name string) error {
 		if !slices.Contains(cfg.WhiteExts, ext) {
 			return fmt.Errorf("unsupported file extension %s", ext)
 		}
-	}
-	return nil
-}
-
-// checkSize 校验文件大小是否超限
-func checkSize(size, limit int64) error {
-	if size > limit {
-		return fmt.Errorf("file size %d bytes exceeds limit %d bytes", size, limit)
 	}
 	return nil
 }
@@ -205,19 +203,6 @@ func streamToPath(dst string, src io.Reader, limit int64) error {
 		return err
 	}
 	return os.Rename(tmp, dst)
-}
-
-// genPath 生成存储路径：{dir}/{清理名}_{随机码}.{ext}
-// 非法字符和空格替换为 *，首尾 * 去除
-func genPath(dir, fileName string) string {
-	ext := filepath.Ext(fileName)
-	base := strings.TrimSuffix(fileName, ext)
-	base = reIllegal.ReplaceAllString(base, "*")
-	base = strings.Trim(base, "*")
-	if base == "" {
-		base = "file"
-	}
-	return filepath.Join(dir, base+"_"+generate.Code(6)+ext)
 }
 
 // writeBytes 写入字节数据到目标路径，自动创建父目录
@@ -281,11 +266,11 @@ func mergeFiles(chunkDir, writePath string) error {
 
 // listRegularFiles 列出目录下的常规文件名（不含子目录），按文件名排序
 func listRegularFiles(dirPath string) ([]string, error) {
+	names := make([]string, 0)
 	entries, err := os.ReadDir(dirPath)
 	if err != nil {
-		return nil, err
+		return names, err
 	}
-	var names []string
 	for _, e := range entries {
 		if e.Type().IsRegular() {
 			names = append(names, e.Name())
@@ -293,20 +278,4 @@ func listRegularFiles(dirPath string) ([]string, error) {
 	}
 	sort.Strings(names)
 	return names, nil
-}
-
-// openTmp 创建临时文件用于原子写入，调用方负责 Close + Rename。
-func openTmp(targetPath string) (*os.File, error) {
-	return os.OpenFile(targetPath+".tmp", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-}
-
-// copyToFile 将 src 流式写入 dstPath，使用预分配 buf。
-func copyToFile(dstPath string, src io.Reader, buf []byte) error {
-	dst, err := os.Create(dstPath)
-	if err != nil {
-		return err
-	}
-	defer dst.Close()
-	_, err = io.CopyBuffer(dst, src, buf)
-	return err
 }

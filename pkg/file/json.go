@@ -19,7 +19,7 @@ func JSONWrite(filePath string, data any) error {
 		return err
 	}
 
-	f, err := openTmp(filePath)
+	f, err := os.OpenFile(filePath+".tmp", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
 		return err
 	}
@@ -58,7 +58,7 @@ func JSONLineWrite(filePath string, data []any) error {
 		return err
 	}
 
-	f, err := openTmp(filePath)
+	f, err := os.OpenFile(filePath+".tmp", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
 		return err
 	}

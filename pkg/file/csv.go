@@ -27,7 +27,7 @@ func CSVWrite(filePath string, data [][]string, appendMode bool) error {
 	if appendMode {
 		f, err = os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	} else {
-		f, err = openTmp(filePath)
+		f, err = os.OpenFile(filePath+".tmp", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	}
 	if err != nil {
 		return err
