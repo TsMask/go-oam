@@ -15,14 +15,17 @@ import (
 
 // Options 请求选项
 type Options struct {
-	Ctx       context.Context   // 上下文，用于取消/超时控制
-	Headers   map[string]string // 自定义请求头
-	Query     map[string]string // 查询参数
-	Form      map[string]string // 表单数据
-	Files     []FileUpload      // 文件上传列表
-	JSON      any               // JSON Body
-	Debug     bool              // 是否打印调试日志
-	LocalAddr string            // 发起请求的源 IP 地址（多网卡场景），空值使用系统默认
+	Ctx           context.Context   // 上下文，用于取消/超时控制
+	Headers       map[string]string // 自定义请求头 设置User-Agent
+	Query         map[string]string // 查询参数
+	Form          map[string]string // 表单数据 自动设置 application/x-www-form-urlencoded
+	Files         []FileUpload      // 文件上传列表 multipart 上传时自动设置 multipart/form-data
+	JSON          any               // JSON Body 传入 struct/map/slice 时会自动设置 Content-Type: application/json
+	Debug         bool              // 是否打印调试日志 resty
+	LocalAddr     string            // 发起请求的源 IP 地址（多网卡场景），空值使用系统默认
+	RetryCount    int               // 重试次数，0 表示不重试（默认）
+	RetryWaitTime time.Duration     // 重试等待时间，默认 300ms
+	RetryMaxWait  time.Duration     // 重试最大等待时间，默认 5s
 }
 
 // FileUpload 文件上传项
@@ -34,39 +37,49 @@ type FileUpload struct {
 	Name   string    // 文件名（使用 Reader/Data 时必填，缺省取 Field）
 }
 
-// 全局复用 Client（无源 IP 绑定）
-var baseClient = newClient("")
-
-// 带源 IP 的 client 缓存，按 IP 复用连接池
-var localClients sync.Map
-
-// getClient 获取 HTTP 客户端（带源 IP 缓存复用）
-func getClient(localAddr string) *resty.Client {
-	if localAddr == "" {
-		return baseClient
-	}
-	if v, ok := localClients.Load(localAddr); ok {
-		return v.(*resty.Client)
-	}
-	client := newClient(localAddr)
-	actual, _ := localClients.LoadOrStore(localAddr, client)
-	return actual.(*resty.Client)
+// clientCacheKey 客户端缓存键（localAddr + 重试配置相同的 client 复用）
+type clientCacheKey struct {
+	localAddr     string
+	retryCount    int
+	retryWaitTime time.Duration
+	retryMaxWait  time.Duration
 }
 
-// newClient 创建 resty 客户端（localAddr 为空时使用系统默认路由）
-func newClient(localAddr string) *resty.Client {
+// clientCache 统一客户端缓存
+var clientCache sync.Map
+
+// getClient 获取 HTTP 客户端（按配置缓存复用，localAddr 为空时使用系统默认路由）
+func getClient(opts Options) *resty.Client {
+	// 构建缓存键
+	key := clientCacheKey{localAddr: opts.LocalAddr}
+	if opts.RetryCount > 0 {
+		key.retryCount = opts.RetryCount
+		key.retryWaitTime = opts.RetryWaitTime
+		if key.retryWaitTime <= 0 {
+			key.retryWaitTime = 300 * time.Millisecond
+		}
+		key.retryMaxWait = opts.RetryMaxWait
+		if key.retryMaxWait <= 0 {
+			key.retryMaxWait = 5 * time.Second
+		}
+	}
+	// 命中缓存直接返回
+	if v, ok := clientCache.Load(key); ok {
+		return v.(*resty.Client)
+	}
+	// 创建新客户端
 	transport := &http.Transport{
 		MaxIdleConns:          200,
 		MaxIdleConnsPerHost:   50,
 		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:  10 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
 		ResponseHeaderTimeout: 30 * time.Second,
 		ForceAttemptHTTP2:     true,
 	}
 
 	// 绑定源 IP 发起连接
-	if localAddr != "" {
-		if localIP := net.ParseIP(localAddr); localIP != nil {
+	if key.localAddr != "" {
+		if localIP := net.ParseIP(key.localAddr); localIP != nil {
 			transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
 				d := &net.Dialer{
 					LocalAddr: &net.TCPAddr{IP: localIP},
@@ -75,19 +88,23 @@ func newClient(localAddr string) *resty.Client {
 			}
 		}
 	}
-
-	return resty.New().
+	c := resty.New().
 		SetTransport(transport).
-		SetRetryCount(2).
-		SetRetryWaitTime(300 * time.Millisecond).
-		SetRetryMaxWaitTime(5 * time.Second).
-		SetTimeout(3 * time.Minute).
+		SetRetryCount(0).
+		SetTimeout(time.Minute).
 		SetCloseConnection(false)
+	if key.retryCount > 0 {
+		c.SetRetryCount(key.retryCount).
+			SetRetryWaitTime(key.retryWaitTime).
+			SetRetryMaxWaitTime(key.retryMaxWait)
+	}
+	actual, _ := clientCache.LoadOrStore(key, c)
+	return actual.(*resty.Client)
 }
 
 // build 构建单次请求
 func build(opts Options) *resty.Request {
-	client := getClient(opts.LocalAddr)
+	client := getClient(opts)
 	req := client.R()
 	req.SetDebug(opts.Debug)
 
@@ -101,7 +118,6 @@ func build(opts Options) *resty.Request {
 		req.SetQueryParams(opts.Query)
 	}
 	if opts.JSON != nil {
-		req.SetHeader("Content-Type", "application/json")
 		req.SetBody(opts.JSON)
 	}
 	if len(opts.Form) > 0 {
@@ -137,6 +153,11 @@ func do(req *resty.Request, method, url string) ([]byte, error) {
 		return resp.Body(), fmt.Errorf("fetch %s %s: HTTP %d", method, url, resp.StatusCode())
 	}
 	return resp.Body(), nil
+}
+
+// Request 发送通用请求，method 为 HTTP 方法（GET/POST/PUT/DELETE/PATCH 等）
+func Request(method, url string, opts Options) ([]byte, error) {
+	return do(build(opts), method, url)
 }
 
 // Get 发送 GET 请求
