@@ -1,18 +1,23 @@
 package oam
 
-// OAM SDK 实例
-type OAM struct {
-	NE string
-}
-
 // Option Functional Options 接口
 type Option func(*OAM)
 
-// WithNEConfig 设置 NE 配置
-func WithNEConfig() Option {
+// WithVersion 设置版本配置
+func WithVersion(v string) Option {
 	return func(o *OAM) {
-		o.NE = ""
+		o.version = v
 	}
+}
+
+// OAM SDK 实例
+type OAM struct {
+	version string
+}
+
+// Version 获取当前版本
+func (o *OAM) Version() string {
+	return o.version
 }
 
 // New 创建 OAM 实例
