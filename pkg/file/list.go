@@ -6,17 +6,14 @@ import (
 	"sort"
 )
 
-// FileEntry 文件条目信息
+// FileEntry 文件信息
 type FileEntry struct {
-	Name    string `json:"name"`    // 文件名
-	Path    string `json:"path"`    // 完整路径
-	Type    string `json:"type"`    // 类型: dir, file, symlink
-	Mode    string `json:"mode"`    // 权限字符串如 "rwxr-xr-x"
-	Size    int64  `json:"size"`    // 文件大小(字节)
-	ModTime int64  `json:"modTime"` // 最后修改时间(Unix毫秒)
-	Owner   string `json:"owner"`   // 所属用户
-	Group   string `json:"group"`   // 所属组
-	Links   int64  `json:"links"`   // 硬链接数
+	FileName     string `json:"fileName"`     // 文件名
+	FilePath     string `json:"filePath"`     // 完整路径
+	FileType     string `json:"fileType"`     // 类型: dir, file, symlink
+	FileMode     string `json:"fileMode"`     // 权限字符串如 "rwxr-xr-x"
+	FileSize     int64  `json:"fileSize"`     // 文件大小(字节)
+	ModifiedTime int64  `json:"modifiedTime"` // 最后修改时间(Unix毫秒)
 }
 
 // ListDir 列出当前目录下的文件条目，按修改时间倒序排列。
@@ -48,7 +45,7 @@ func ListDir(dirPath string, pattern string) ([]FileEntry, error) {
 	}
 
 	sort.Slice(results, func(i, j int) bool {
-		return results[i].ModTime > results[j].ModTime
+		return results[i].ModifiedTime > results[j].ModifiedTime
 	})
 	return results, nil
 }
@@ -76,18 +73,12 @@ func newFileEntry(info os.FileInfo, name, dirPath string) FileEntry {
 	} else if info.Mode()&os.ModeSymlink != 0 {
 		fileType = "symlink"
 	}
-
-	links, owner, group := fileInfoExtra(info)
-
 	return FileEntry{
-		Name:    name,
-		Path:    filepath.Join(dirPath, name),
-		Type:    fileType,
-		Mode:    info.Mode().String(),
-		Size:    info.Size(),
-		ModTime: info.ModTime().UnixMilli(),
-		Owner:   owner,
-		Group:   group,
-		Links:   links,
+		FileName:     name,
+		FilePath:     filepath.Join(dirPath, name),
+		FileType:     fileType,
+		FileMode:     info.Mode().String(),
+		FileSize:     info.Size(),
+		ModifiedTime: info.ModTime().UnixMilli(),
 	}
 }
