@@ -22,24 +22,24 @@ type Session struct {
 // NewSession 创建远程交互式终端会话
 func (c *Client) NewSession(cols, rows int) (*Session, error) {
 	if c.closed.Load() {
-		return nil, fmt.Errorf("ssh: 连接已关闭")
+		return nil, fmt.Errorf("ssh was closed")
 	}
 
 	sshSession, err := c.sshClient.NewSession()
 	if err != nil {
-		return nil, fmt.Errorf("ssh: 创建会话失败: %w", err)
+		return nil, err
 	}
 
 	stdin, err := sshSession.StdinPipe()
 	if err != nil {
 		sshSession.Close()
-		return nil, fmt.Errorf("ssh: 获取标准输入管道失败: %w", err)
+		return nil, err
 	}
 
 	stdout, err := sshSession.StdoutPipe()
 	if err != nil {
 		sshSession.Close()
-		return nil, fmt.Errorf("ssh: 获取标准输出管道失败: %w", err)
+		return nil, err
 	}
 
 	modes := gossh.TerminalModes{
@@ -49,11 +49,11 @@ func (c *Client) NewSession(cols, rows int) (*Session, error) {
 	}
 	if err := sshSession.RequestPty("xterm", rows, cols, modes); err != nil {
 		sshSession.Close()
-		return nil, fmt.Errorf("ssh: 请求伪终端失败: %w", err)
+		return nil, err
 	}
 	if err := sshSession.Shell(); err != nil {
 		sshSession.Close()
-		return nil, fmt.Errorf("ssh: 启动Shell失败: %w", err)
+		return nil, err
 	}
 
 	s := &Session{
@@ -83,7 +83,7 @@ func (s *Session) Close() {
 // Write 写入命令（回车 \n 才会执行）
 func (s *Session) Write(cmd string) (int, error) {
 	if s.stdin == nil {
-		return 0, fmt.Errorf("ssh session: 会话已关闭")
+		return 0, fmt.Errorf("ssh session was closed")
 	}
 	return s.stdin.Write([]byte(cmd))
 }
@@ -115,7 +115,7 @@ func (s *Session) Read() []byte {
 // WindowChange 调整终端窗口大小
 func (s *Session) WindowChange(cols, rows int) error {
 	if s.session == nil {
-		return fmt.Errorf("ssh session: 会话已关闭")
+		return fmt.Errorf("ssh session was closed")
 	}
 	return s.session.WindowChange(rows, cols)
 }

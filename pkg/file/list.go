@@ -9,7 +9,6 @@ import (
 // FileEntry 文件信息
 type FileEntry struct {
 	FileName     string `json:"fileName"`     // 文件名
-	FilePath     string `json:"filePath"`     // 完整路径
 	FileType     string `json:"fileType"`     // 类型: dir, file, symlink
 	FileMode     string `json:"fileMode"`     // 权限字符串如 "rwxr-xr-x"
 	FileSize     int64  `json:"fileSize"`     // 文件大小(字节)
@@ -41,7 +40,7 @@ func ListDir(dirPath string, pattern string) ([]FileEntry, error) {
 			continue
 		}
 
-		results = append(results, newFileEntry(info, de.Name(), dirPath))
+		results = append(results, newFileEntry(info))
 	}
 
 	sort.Slice(results, func(i, j int) bool {
@@ -56,7 +55,7 @@ func Stat(filePath string) (FileEntry, error) {
 	if err != nil {
 		return FileEntry{}, err
 	}
-	return newFileEntry(info, filepath.Base(filePath), filepath.Dir(filePath)), nil
+	return newFileEntry(info), nil
 }
 
 // Exists 检查文件或目录是否存在
@@ -66,7 +65,7 @@ func Exists(filePath string) bool {
 }
 
 // newFileEntry 从 os.FileInfo 构造 FileEntry
-func newFileEntry(info os.FileInfo, name, dirPath string) FileEntry {
+func newFileEntry(info os.FileInfo) FileEntry {
 	fileType := "file"
 	if info.IsDir() {
 		fileType = "dir"
@@ -74,8 +73,7 @@ func newFileEntry(info os.FileInfo, name, dirPath string) FileEntry {
 		fileType = "symlink"
 	}
 	return FileEntry{
-		FileName:     name,
-		FilePath:     filepath.Join(dirPath, name),
+		FileName:     info.Name(),
 		FileType:     fileType,
 		FileMode:     info.Mode().String(),
 		FileSize:     info.Size(),

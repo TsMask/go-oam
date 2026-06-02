@@ -17,7 +17,6 @@ import (
 // FileEntry 文件信息
 type FileEntry struct {
 	FileName     string `json:"fileName"`     // 文件名
-	FilePath     string `json:"filePath"`     // 完整路径
 	FileType     string `json:"fileType"`     // 类型: dir, file, symlink
 	FileMode     string `json:"fileMode"`     // 权限字符串如 "rwxr-xr-x"
 	FileSize     int64  `json:"fileSize"`     // 文件大小(字节)
@@ -37,9 +36,13 @@ type SFTP struct {
 
 // NewSFTP 创建SFTP文件传输客户端
 func (c *Client) NewSFTP() (*SFTP, error) {
+	if c.closed.Load() {
+		return nil, fmt.Errorf("ssh was closed")
+	}
+
 	sftpClient, err := gosftp.NewClient(c.sshClient)
 	if err != nil {
-		return nil, fmt.Errorf("ssh sftp: 创建SFTP客户端失败: %w", err)
+		return nil, err
 	}
 	return &SFTP{client: sftpClient}, nil
 }
@@ -54,51 +57,35 @@ func (s *SFTP) Close() {
 }
 
 // Client 获取SFTP客户端
-func (s *SFTP) Client() *gosftp.Client {
+func (s *SFTP) Client() (*gosftp.Client, error) {
 	if s.client != nil {
-		return s.client
+		return s.client, nil
 	}
-	return nil
+	return nil, fmt.Errorf("ssh sftp client is not initialized")
 }
 
 // === 文件列表
 
 // ListDir 列出远程目录下的文件
 //
-// 通过 SFTP 协议 ReadDir 获取文件属性。pattern 为 glob 匹配模式（如 "*.log"），为空列出所有。
+// pattern 为 glob 匹配模式（如 "*.log"、"smf*"），为空列出所有。
 // 结果按修改时间倒序排列。
 func (s *SFTP) ListDir(remoteDir, pattern string) ([]FileEntry, error) {
-	var names []string
-	if pattern != "" {
-		// Glob 模糊匹配
-		matches, err := s.client.Glob(filepath.Join(remoteDir, pattern))
-		if err != nil {
-			return nil, fmt.Errorf("ssh sftp: 匹配文件失败: %w", err)
-		}
-		names = matches
-	}
-
 	entries, err := s.client.ReadDir(remoteDir)
 	if err != nil {
-		return nil, fmt.Errorf("ssh sftp: 读取远程目录失败: %w", err)
-	}
-
-	// 构建 glob 匹配集合
-	globSet := make(map[string]bool, len(names))
-	for _, n := range names {
-		globSet[filepath.Base(n)] = true
+		return nil, err
 	}
 
 	var files []FileEntry
 	for _, entry := range entries {
-		name := entry.Name()
-
-		// 如果有 glob 条件且当前名称不匹配，跳过
-		if pattern != "" && !globSet[name] {
-			continue
+		if pattern != "" {
+			matched, matchErr := filepath.Match(pattern, entry.Name())
+			if matchErr != nil || !matched {
+				continue
+			}
 		}
 
-		files = append(files, newFileEntry(entry, name, remoteDir))
+		files = append(files, newFileEntry(entry))
 	}
 
 	sort.Slice(files, func(i, j int) bool {
@@ -111,9 +98,9 @@ func (s *SFTP) ListDir(remoteDir, pattern string) ([]FileEntry, error) {
 func (s *SFTP) Stat(remotePath string) (FileEntry, error) {
 	info, err := s.client.Stat(remotePath)
 	if err != nil {
-		return FileEntry{}, fmt.Errorf("ssh sftp: 获取文件信息失败: %w", err)
+		return FileEntry{}, err
 	}
-	return newFileEntry(info, filepath.Base(remotePath), filepath.Dir(remotePath)), nil
+	return newFileEntry(info), nil
 }
 
 // Exists 检查远程文件或目录是否存在
@@ -123,16 +110,16 @@ func (s *SFTP) Exists(remotePath string) bool {
 }
 
 // newFileEntry 从 os.FileInfo 构造 FileEntry
-func newFileEntry(info os.FileInfo, name, dirPath string) FileEntry {
+func newFileEntry(info os.FileInfo) FileEntry {
 	fileType := "file"
 	if info.IsDir() {
 		fileType = "dir"
 	} else if info.Mode()&os.ModeSymlink != 0 {
 		fileType = "symlink"
 	}
+
 	return FileEntry{
-		FileName:     name,
-		FilePath:     filepath.Join(dirPath, name),
+		FileName:     info.Name(),
 		FileType:     fileType,
 		FileMode:     info.Mode().String(),
 		FileSize:     info.Size(),
@@ -142,11 +129,11 @@ func newFileEntry(info os.FileInfo, name, dirPath string) FileEntry {
 
 // === 文件管理
 
-// RemoveOldFiles 删除远程目录下修改时间小于 expireTime 的文件
+// RemoveOldFiles 删除远程目录下修改时间早于 expireTime 的文件
 func (s *SFTP) RemoveOldFiles(remoteDir string, expireTime time.Time) error {
 	entries, err := s.client.ReadDir(remoteDir)
 	if err != nil {
-		return fmt.Errorf("ssh sftp: 读取远程目录失败: %w", err)
+		return err
 	}
 
 	for _, entry := range entries {
@@ -169,22 +156,22 @@ func (s *SFTP) RemoveOldFiles(remoteDir string, expireTime time.Time) error {
 func (s *SFTP) Upload(localPath, remotePath string) error {
 	localFile, err := os.Open(localPath)
 	if err != nil {
-		return fmt.Errorf("ssh sftp: 打开本地文件失败: %w", err)
+		return err
 	}
 	defer localFile.Close()
 
 	if err := s.client.MkdirAll(filepath.Dir(remotePath)); err != nil {
-		return fmt.Errorf("ssh sftp: 创建远程目录失败: %w", err)
+		return err
 	}
 
 	remoteFile, err := s.client.Create(remotePath)
 	if err != nil {
-		return fmt.Errorf("ssh sftp: 创建远程文件失败: %w", err)
+		return err
 	}
 	defer remoteFile.Close()
 
 	if _, err := io.Copy(remoteFile, localFile); err != nil {
-		return fmt.Errorf("ssh sftp: 上传文件失败: %w", err)
+		return err
 	}
 	return nil
 }
@@ -192,23 +179,23 @@ func (s *SFTP) Upload(localPath, remotePath string) error {
 // Download 下载远程文件到本地
 func (s *SFTP) Download(remotePath, localPath string) error {
 	if err := os.MkdirAll(filepath.Dir(localPath), 0775); err != nil {
-		return fmt.Errorf("ssh sftp: 创建本地目录失败: %w", err)
+		return err
 	}
 
 	remoteFile, err := s.client.Open(remotePath)
 	if err != nil {
-		return fmt.Errorf("ssh sftp: 打开远程文件失败: %w", err)
+		return err
 	}
 	defer remoteFile.Close()
 
 	localFile, err := os.Create(localPath)
 	if err != nil {
-		return fmt.Errorf("ssh sftp: 创建本地文件失败: %w", err)
+		return err
 	}
 	defer localFile.Close()
 
 	if _, err := io.Copy(localFile, remoteFile); err != nil {
-		return fmt.Errorf("ssh sftp: 下载文件失败: %w", err)
+		return err
 	}
 	return nil
 }
@@ -226,7 +213,7 @@ func (s *SFTP) UploadDir(localDir, remoteDir string) error {
 
 		if info.IsDir() {
 			if err := s.client.MkdirAll(remotePath); err != nil {
-				return fmt.Errorf("ssh sftp: 创建远程目录 %s 失败: %w", remotePath, err)
+				return err
 			}
 		} else {
 			if err := s.Upload(localPath, remotePath); err != nil {
@@ -240,12 +227,12 @@ func (s *SFTP) UploadDir(localDir, remoteDir string) error {
 // DownloadDir 递归下载远程目录到本地
 func (s *SFTP) DownloadDir(remoteDir, localDir string) error {
 	if err := os.MkdirAll(localDir, 0775); err != nil {
-		return fmt.Errorf("ssh sftp: 创建本地目录失败: %w", err)
+		return err
 	}
 
 	entries, err := s.client.ReadDir(remoteDir)
 	if err != nil {
-		return fmt.Errorf("ssh sftp: 读取远程目录失败: %w", err)
+		return err
 	}
 
 	for _, entry := range entries {

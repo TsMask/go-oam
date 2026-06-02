@@ -49,10 +49,10 @@ func New(opts ...Option) (*Client, error) {
 		opt(c)
 	}
 	if c.addr == "" {
-		return nil, fmt.Errorf("ssh: 主机地址未设置")
+		return nil, fmt.Errorf("ssh host address not set")
 	}
 	if c.password == "" && c.privateKey == "" {
-		return nil, fmt.Errorf("ssh: 未设置认证方式")
+		return nil, fmt.Errorf("ssh host authentication method not set")
 	}
 	if err := c.connect(); err != nil {
 		return nil, err
@@ -80,7 +80,7 @@ func (c *Client) connect() error {
 			signer, err = gossh.ParsePrivateKey([]byte(c.privateKey))
 		}
 		if err != nil {
-			return fmt.Errorf("ssh: 解析私钥失败: %w", err)
+			return err
 		}
 		config.Auth = []gossh.AuthMethod{gossh.PublicKeys(signer)}
 	} else {
@@ -89,7 +89,7 @@ func (c *Client) connect() error {
 
 	client, err := gossh.Dial("tcp", dialAddr, config)
 	if err != nil {
-		return fmt.Errorf("ssh: 连接 %s 失败: %w", dialAddr, err)
+		return err
 	}
 	c.sshClient = client
 	return nil
@@ -114,7 +114,7 @@ func (c *Client) User() string { return c.user }
 // Exec 执行远程命令，返回标准输出和错误输出的合并结果
 func (c *Client) Exec(cmdStr string) (string, error) {
 	if c.closed.Load() {
-		return "", fmt.Errorf("ssh: 连接已关闭")
+		return "", fmt.Errorf("ssh was closed")
 	}
 	session, err := c.sshClient.NewSession()
 	if err != nil {
