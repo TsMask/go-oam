@@ -1,6 +1,7 @@
 package ssh
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"strconv"
@@ -36,6 +37,10 @@ type Client struct {
 	sshClient *gossh.Client
 	closed    atomic.Bool
 	closeOnce sync.Once
+
+	keepAlive       time.Duration
+	keepAliveCtx    context.Context
+	keepAliveCancel context.CancelFunc
 }
 
 // New 创建SSH客户端并建立连接
@@ -44,6 +49,7 @@ func New(opts ...Option) (*Client, error) {
 		port:        22,
 		user:        "root",
 		dialTimeout: 5 * time.Second,
+		keepAlive:   0,
 	}
 	for _, opt := range opts {
 		opt(c)
@@ -92,6 +98,13 @@ func (c *Client) connect() error {
 		return err
 	}
 	c.sshClient = client
+
+	// 通过 SSH 全局请求 "keepalive@openssh.com" 周期性探活，
+	// 远端无响应时主动关闭连接，防止被服务端 idle 策略踢出。
+	if c.keepAlive > 0 {
+		c.keepAliveCtx, c.keepAliveCancel = context.WithCancel(context.Background())
+		go c.keepAliveLoop()
+	}
 	return nil
 }
 
@@ -99,6 +112,9 @@ func (c *Client) connect() error {
 func (c *Client) Close() {
 	c.closeOnce.Do(func() {
 		c.closed.Store(true)
+		if c.keepAliveCancel != nil {
+			c.keepAliveCancel()
+		}
 		if c.sshClient != nil {
 			c.sshClient.Close()
 		}
@@ -123,4 +139,25 @@ func (c *Client) Exec(cmdStr string) (string, error) {
 	defer session.Close()
 	buf, err := session.CombinedOutput(cmdStr)
 	return string(buf), err
+}
+
+// keepAliveLoop 周期发送 SSH keepalive 请求。
+// SendRequest 在连接已死时返回错误，此时主动关闭 client 释放资源。
+func (c *Client) keepAliveLoop() {
+	ticker := time.NewTicker(c.keepAlive)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-c.keepAliveCtx.Done():
+			return
+		case <-ticker.C:
+			if c.closed.Load() || c.sshClient == nil {
+				return
+			}
+			if _, _, err := c.sshClient.SendRequest("keepalive@openssh.com", true, nil); err != nil {
+				c.Close()
+				return
+			}
+		}
+	}
 }

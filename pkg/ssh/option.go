@@ -53,3 +53,14 @@ func WithDialTimeout(d time.Duration) Option {
 		}
 	}
 }
+
+// WithKeepAlive 设置心跳间隔，<=0 表示禁用（默认禁用）。
+// 启用后客户端会按此间隔向服务端发送 keepalive 探活，
+// 防止被服务端 idle 策略踢出连接。
+func WithKeepAlive(interval time.Duration) Option {
+	return func(c *Client) {
+		if interval > 0 {
+			c.keepAlive = interval
+		}
+	}
+}

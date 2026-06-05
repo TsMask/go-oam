@@ -527,7 +527,7 @@ s.Serve(func(conn *net.UDPConn, data []byte, addr *net.UDPAddr) {
 
 ## telnet
 
-Telnet 客户端与服务端，并发安全。
+Telnet 客户端与服务端，并发安全；内置 IAC 协商字节过滤（Exec 默认剥离协商序列，KeepIAC 可关闭）。
 
 ```go
 import "github.com/tsmask/go-oam/pkg/telnet"
@@ -536,49 +536,106 @@ import "github.com/tsmask/go-oam/pkg/telnet"
 **客户端**
 
 ```go
-c := &telnet.Client{Addr: "192.168.1.1", Port: "23"}
+c := &telnet.Client{
+    Addr:         "192.168.1.1",
+    Port:         "23",
+    DialTimeout:  5 * time.Second,
+    TCPKeepAlive: 30 * time.Second,
+}
 if err := c.Connect(); err != nil {
     log.Fatal(err)
 }
 defer c.Close()
 
-// 可选：登录认证
-c.Auth("admin", "password")
+// 可选：注册错误监听（远端断开 / 读写错误 / panic 时触发）
+c.OnError(func(err error) { log.Println("telnet:", err) })
 
-// 发送命令，匹配提示符
-out, err := c.Send("display version\r\n", 30*time.Second, func(b []byte) bool {
+// 可选：登录认证（自动等待 prompt，超时 AuthPromptWait）
+if err := c.Auth("admin", "password"); err != nil {
+    log.Fatal(err)
+}
+
+// 执行命令，匹配提示符后返回
+out, err := c.Exec("display version\r\n", func(b []byte) bool {
     return bytes.HasSuffix(b, []byte(">")) || bytes.HasSuffix(b, []byte("#"))
 })
 
 // 原始读写
 c.Write([]byte("enable\r\n"))
-data, _ := c.Read(2 * time.Second)
+data, _ := c.Read()  // 阻塞，超时由调用方用 select + time.After 控制
+
+// 终端窗口变更
+c.WindowChange(24, 80)
 ```
+
+| 字段 / 方法 | 说明 |
+|---|---|
+| `Addr` / `Port` | 必填：服务端地址与端口 |
+| `DialTimeout` | 拨号超时；0 表示 10s |
+| `ReadTimeout` / `WriteTimeout` | 单次读写底层超时；0 表示不限 |
+| `TCPKeepAlive` | TCP KeepAlive 周期；0 表示系统默认 |
+| `MaxRead` | Exec 单次最大读取字节数；0 表示 1MB，超出返回 `ErrClientTruncated` |
+| `AuthPromptWait` | Auth 等待 prompt 超时；0 表示 2s |
+| `Newline` | Auth 凭据行尾；空串表示 `"\r\n"` |
+| `KeepIAC` | Exec 是否保留原始 IAC 协商字节（默认过滤） |
+| `Connect()` | 拨号并启动后台 readLoop；幂等 |
+| `Close()` | 关闭并唤醒所有阻塞 Read；幂等；阻塞到 readLoop 退出 |
+| `State()` / `IsConnected()` | 当前状态（init/connected/closed） |
+| `OnError(fn)` | 注册错误回调；可在任意时刻调用 |
+| `Write(b)` / `Read()` | 原始读写；Read 返回 `io.EOF` 表示连接已关闭 |
+| `Exec(cmd, done)` | 发送命令并按 done 回调判定结束 |
+| `Auth(user, password)` | 发送凭据；空字符串跳过对应步骤 |
+| `WindowChange(h, w)` | NAWS 协商通知远端窗口大小 |
+
+并发约束（仅靠文档，无编程强制）：`Exec / Auth / Read` 互不并发。
 
 **服务端**
 
 ```go
 s := &telnet.Server{
-    Port:     "2323",
-    MaxConns: 10,
-    OnError:  func(err error) { log.Println(err) },
+    Handler: func(c *telnet.Conn) error {
+        if _, err := c.Write([]byte("Hello\r\n")); err != nil {
+            return err
+        }
+        buf := make([]byte, 1024)
+        n, err := c.Read(buf)
+        if err != nil {
+            return err
+        }
+        _, err = c.Write(buf[:n])
+        return err
+    },
+    OnError:      func(err error) { log.Println("telnet server:", err) },
+    MaxConns:     100,
+    TCPKeepAlive: 30 * time.Second,
 }
-s.Listen()
+go func() {
+    if err := s.Listen(":2323"); err != nil && !errors.Is(err, telnet.ErrServerClosed) {
+        log.Println("serve:", err)
+    }
+}()
 defer s.Close()
-
-s.Accept(func(conn net.Conn) {
-    conn.Write([]byte("Welcome\r\n> "))
-    buf := make([]byte, 1024)
-    n, _ := conn.Read(buf)
-    conn.Write(buf[:n])
-})
 ```
 
+| 字段 / 方法 | 说明 |
+|---|---|
+| `Handler` | 必填：连接处理函数；返回 error 或 panic 统一通过 OnError 输出 |
+| `OnError` | 可选：错误回调；回调内 panic 被吞掉避免影响其他连接 |
+| `MaxConns` | 最大并发连接数；0 表示不限，超限返回提示再断开 |
+| `TCPKeepAlive` | TCP KeepAlive 周期；0 表示系统默认 |
+| `Listen(address)` | 阻塞监听到 Close；address 格式同 `net.Listen` |
+| `Close()` | 阻塞到所有 handler goroutine 退出（关 listener + 取消 ctx 唤醒 IO + 强关活跃 conn） |
+| `State()` / `ConnCount()` / `ListenAddr()` | 运行时状态 |
+
+`telnet.Conn`（handler 内的连接）：`Read` / `Write` / `Close` / `Context()` / `Server()` / `RemoteAddr()` / `LocalAddr()` / `IsClosed()`。`Context()` 与服务端生命周期联动，关停时自动取消并设置 deadline 唤醒阻塞 IO。
+
+错误：`ErrServerClosed`（已关闭后再 Listen）/ `ErrAlreadyServing`（并发启动）/ `ErrNoHandler`（未设置 Handler）；客户端：`ErrClientClosed` / `ErrClientNotConnected` / `ErrClientTruncated`。
 ---
 
 ## 设计原则
 
-- **并发安全** — 客户端结构体均使用 `sync.RWMutex` + `sync.Mutex` 双锁保护
-- **连接池复用** — `fetch` 按源 IP 缓存 HTTP 客户端；`socket`/`telnet` 使用 `sync.Pool` 复用读缓冲区
-- **参数注入** — 配置通过结构体传入
-- **`done func([]byte) bool`** — 统一的读取终止回调模式（socket/telnet）
+- **并发安全** — 状态用 `atomic.Int32` CAS 守护生命周期；共享字段按职责分锁（client：`mu` + `writeMu`，server：`listenerMu` + `connsMu`）；`Close` 用 `sync.Once` 保证清理幂等；用专门的 WaitGroup（client 的 `readWG` / server 的 `listenWG`）串行化 wg 调用，规避 `Add` 与 `Wait` 的语义 race
+- **生命周期可观测** — 暴露 `State()` / `IsConnected()` / `ConnCount()` / `ListenAddr()`，远端异常断开时自动切到 closed 状态
+- **配置注入** — 导出字段配置（`&Server{Handler: fn, MaxConns: 100}` / `&Client{Addr: ..., DialTimeout: ...}`），零值可用，配置必须在 Listen/Connect 之前赋值
+- **资源复用** — `fetch` 按源 IP 缓存 HTTP 客户端；`socket` / `telnet` 使用 `sync.Pool` 复用读缓冲区
+- **统一读取终止回调** — `done func([]byte) bool` 模式贯穿 `socket` 与 `telnet` 的命令读取
