@@ -306,8 +306,7 @@ func (s *Server) OnDisconnect(fn func(*Conn)) { s.onDisconnect = fn }
 // ============================================================================
 
 // Broadcast 向所有连接广播消息
-func (s *Server) Broadcast(action string, data []byte) {
-	resp := &types.Response{Action: action, Code: 200, Data: data}
+func (s *Server) Broadcast(resp *types.Response) {
 	s.conns.Range(func(c *Conn) bool {
 		_ = c.SendResp(resp)
 		return true
@@ -315,8 +314,7 @@ func (s *Server) Broadcast(action string, data []byte) {
 }
 
 // BroadcastFilter 向满足条件的连接广播消息
-func (s *Server) BroadcastFilter(action string, data []byte, filter func(*Conn) bool) {
-	resp := &types.Response{Action: action, Code: 200, Data: data}
+func (s *Server) BroadcastFilter(resp *types.Response, filter func(*Conn) bool) {
 	s.conns.Range(func(c *Conn) bool {
 		if filter(c) {
 			_ = c.SendResp(resp)
@@ -330,16 +328,14 @@ func (s *Server) BroadcastFilter(action string, data []byte, filter func(*Conn) 
 // ============================================================================
 
 // Publish 向某 topic 的所有订阅者发布消息
-func (s *Server) Publish(topic string, data []byte) {
-	resp := &types.Response{Action: topic, Code: 200, Data: data}
+func (s *Server) Publish(topic string, resp *types.Response) {
 	for _, c := range s.topics.subscribers(topic) {
 		_ = c.SendResp(resp)
 	}
 }
 
 // PublishFilter 向某 topic 中满足条件的订阅者发布消息
-func (s *Server) PublishFilter(topic string, data []byte, filter func(*Conn) bool) {
-	resp := &types.Response{Action: topic, Code: 200, Data: data}
+func (s *Server) PublishFilter(topic string, resp *types.Response, filter func(*Conn) bool) {
 	for _, c := range s.topics.subscribers(topic) {
 		if filter(c) {
 			_ = c.SendResp(resp)

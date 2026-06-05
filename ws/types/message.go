@@ -12,14 +12,7 @@ import "encoding/json"
 type Request struct {
 	ID     string          `json:"id"`     // 请求唯一标识符（UUID/Nanoid）
 	Action string          `json:"action"` // 动作类型，如 "echo", "chat", "subscribe"
-	Data   json.RawMessage `json:"data"`   // 业务数据
-}
-
-// IsValid 检查请求是否有效
-// 返回：true 表示请求有效，false 表示无效
-// 有效条件：Action 不为空
-func (r *Request) IsValid() bool {
-	return r.Action != ""
+	Data   json.RawMessage `json:"data"`   // 业务数据（JSON格式）
 }
 
 // Response 响应消息
@@ -33,27 +26,10 @@ func (r *Request) IsValid() bool {
 //   - Msg: 错误消息，当 Code != 0 时填充
 //   - Data: 响应数据
 type Response struct {
-	ID     string          `json:"id"`             // 请求标识符（原样返回 Request.ID）
-	Ts     int64           `json:"ts"`             // 响应时间戳（Unix毫秒）
-	Action string          `json:"action"`         // 动作类型
-	Code   int32           `json:"code"`           // 响应状态码：0成功，200成功，4xx客户端错误，5xx服务端错误
-	Msg    string          `json:"msg,omitempty"`  // 错误消息
-	Data   json.RawMessage `json:"data,omitempty"` // 响应数据
-}
-
-// IsSuccess 检查响应是否成功
-// 返回：true 表示成功，false 表示失败
-// 成功条件：Code == 0 或 Code == 200
-func (r *Response) IsSuccess() bool {
-	return r.Code == 0 || r.Code == 200
-}
-
-// Error 获取错误消息
-// 返回：如果响应成功返回空字符串，否则返回错误消息
-// 用于简化错误处理
-func (r *Response) Error() string {
-	if r.IsSuccess() {
-		return ""
-	}
-	return r.Msg
+	ID     string          `json:"id,omitempty"`     // 请求标识符（原样返回 Request.ID）
+	Ts     int64           `json:"ts"`               // 响应时间戳（Unix毫秒）
+	Action string          `json:"action,omitempty"` // 动作类型，如 "echo", "chat", "subscribe"
+	Code   int32           `json:"code"`             // 响应状态码（200成功，4xx客户端错误，5xx服务端错误）
+	Msg    string          `json:"msg,omitempty"`    // 错误消息
+	Data   json.RawMessage `json:"data,omitempty"`   // 响应数据（JSON格式）
 }

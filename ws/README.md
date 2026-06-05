@@ -38,7 +38,12 @@ server.Use(func(next ws.Handler) ws.Handler {
 
 // 注册处理器
 server.Handle("echo", func(conn *ws.Conn, req *ws.Request) {
-    conn.SendOK(req.ID, req.Action, req.Data)
+    conn.SendResp(&ws.Response{
+        ID:     req.ID,
+        Action: req.Action,
+        Code:   200,
+        Data:   req.Data,
+    })
 })
 
 // 连接回调 — r 是原始 HTTP 请求，可读取 Header/Cookie 等
@@ -82,24 +87,6 @@ err := client.Send(&ws.Request{
 })
 ```
 
-## 编解码
-
-通过 `WithServerCodec(name)` / `WithClientCodec(name)` 设置，支持 `"json"`、`"msgpack"`、`"protobuf"`，默认 `"json"`。
-
-服务端**自动检测**客户端编码：
-
-| 客户端发送 | WebSocket 消息类型 | 服务端解码 |
-| ---------- | ------------------ | ---------- |
-| JSON       | Text (1)           | JSON       |
-| MsgPack    | Binary (2)         | MsgPack    |
-| Protobuf   | Binary (2)         | Protobuf   |
-
-响应编码与请求一致 — 客户端发 JSON，服务端回 JSON；客户端发 MsgPack，服务端回 MsgPack。
-
-浏览器始终发 JSON（Text 消息），Go 客户端可选用 MsgPack 或 Protobuf 提升吞吐。**同一服务端可同时服务两类客户端**。
-
-> 当服务端配置了 `"protobuf"` 而浏览器发来 JSON 时，服务端仍能正确解码（Text 消息走 JSON 路径），并用 JSON 回复浏览器。
-
 ## 发布订阅
 
 ```go
@@ -108,19 +95,22 @@ server.Handle("subscribe", func(conn *ws.Conn, req *ws.Request) {
     conn.Subscribe("news", "alerts")
 })
 
+// 构造响应
+resp := &ws.Response{Action: "news", Data: []byte(`{"title":"hello"}`)}
+
 // 向 topic 发布消息
-server.Publish("news", []byte(`{"title":"hello"}`))
+server.Publish("news", resp)
 
 // 条件发布
-server.PublishFilter("news", data, func(c *ws.Conn) bool {
+server.PublishFilter("news", resp, func(c *ws.Conn) bool {
     return c.ID() != senderID
 })
 
 // 广播所有连接
-server.Broadcast("notification", data)
+server.Broadcast(resp)
 
 // 条件广播
-server.BroadcastFilter("notification", data, func(c *ws.Conn) bool {
+server.BroadcastFilter(resp, func(c *ws.Conn) bool {
     return c.ID() != senderID
 })
 
@@ -159,13 +149,13 @@ server := ws.NewServer(opts...)          // 创建，默认 JSON
 server.Use(middleware...)                // 注册中间件
 server.Handle(action, handler)           // 注册处理器（线程安全）
 
-server.OnConnect(fn)                     // 连接回调 fn(conn, *http.Request)
-server.OnDisconnect(fn)                  // 断开回调 fn(conn)
+server.OnConnect(fn)                     // 连接回调 fn(*Conn, *http.Request)
+server.OnDisconnect(fn)                  // 断开回调 fn(*Conn)
 
-server.Broadcast(action, data)           // 广播所有连接
-server.BroadcastFilter(action, data, fn) // 条件广播
-server.Publish(topic, data)              // 向 topic 发布
-server.PublishFilter(topic, data, fn)    // 条件发布
+server.Broadcast(resp)                   // 广播所有连接（*Response）
+server.BroadcastFilter(resp, fn)         // 条件广播
+server.Publish(topic, resp)              // 向 topic 发布
+server.PublishFilter(topic, resp, fn)    // 条件发布
 server.Topics()                          // 活跃 topic 列表
 server.TopicCount(topic)                 // topic 订阅者数
 
@@ -184,18 +174,16 @@ conn.Context()               // context.Context，取消时连接关闭
 conn.LastActiveTime()        // 最后活跃时间
 conn.CodecName()             // 当前响应编码器名称
 
-conn.Send(id, action, code, data)    // 发送响应
-conn.SendOK(id, action, data)        // 发送成功响应 (code=200)
-conn.SendError(id, action, code, msg)// 发送错误响应
+conn.SendResp(resp)          // 发送响应（构造 *Response 后传入）
 
-conn.SetMeta(key, val)               // 设置元数据
-conn.GetMeta(key)                    // 获取元数据
+conn.SetMeta(key, val)       // 设置元数据
+conn.GetMeta(key)            // 获取元数据
 
-conn.Subscribe(topics...)            // 订阅
-conn.Unsubscribe(topics...)          // 取消订阅
-conn.Subscriptions()                 // 已订阅 topic 列表
+conn.Subscribe(topics...)    // 订阅
+conn.Unsubscribe(topics...)  // 取消订阅
+conn.Subscriptions()         // 已订阅 topic 列表
 
-conn.Close()                         // 关闭连接
+conn.Close()                 // 关闭连接
 ```
 
 ### ConnManager
@@ -203,9 +191,9 @@ conn.Close()                         // 关闭连接
 ```go
 cm := server.ConnManager()
 
-cm.Count()            // 当前连接总数
-cm.Get(id)            // 按 ID 获取连接
-cm.Range(fn)          // 遍历，fn 返回 false 停止
+cm.Count()      // int64 — 当前连接总数
+cm.Get(id)      // 按 ID 获取连接
+cm.Range(fn)    // 遍历，fn 返回 false 停止
 ```
 
 ### Client
@@ -233,6 +221,16 @@ Init → Connecting → Connected ⇄ Reconnecting → Failed
                    Disconnected (Close)
 ```
 
+常量：`StateInit` / `StateConnecting` / `StateConnected` / `StateReconnecting` / `StateFailed` / `StateDisconnected`。
+
+### 错误
+
+| 错误 | 包 | 说明 |
+|---|---|---|
+| `ErrSendFull` | 服务端 | 发送缓冲区满（背压） |
+| `ErrClientClosed` | 客户端 | Client 已关闭后调 Send |
+| `ErrConnectionLost` | 客户端 | 重连超过最大次数 |
+| `ErrInvalidState` | 客户端 | 状态机不允许此操作 |
 ## 配置选项
 
 ### 服务端

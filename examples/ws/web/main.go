@@ -57,7 +57,7 @@ func main() {
 
 	// echo — 原样返回
 	server.Handle("echo", func(conn *ws.Conn, req *ws.Request) {
-		conn.SendOK(req.ID, req.Action, req.Data)
+		conn.SendResp(&ws.Response{ID: req.ID, Action: req.Action, Code: 200, Data: req.Data})
 	})
 
 	// ping — 健康检查
@@ -65,38 +65,41 @@ func main() {
 		data, _ := json.Marshal(map[string]string{
 			"status": "ok",
 		})
-		conn.SendOK(req.ID, req.Action, data)
+		conn.SendResp(&ws.Response{ID: req.ID, Action: req.Action, Code: 200, Data: data})
 	})
 
 	// info — 连接信息（ConnManager.Count + Conn.GetMeta）
 	server.Handle("info", func(conn *ws.Conn, req *ws.Request) {
 		name, _ := conn.GetMeta("name")
 		addr, _ := conn.GetMeta("remote_addr")
-		conn.SendOK(req.ID, req.Action, []byte(fmt.Sprintf(
+		conn.SendResp(&ws.Response{ID: req.ID, Action: req.Action, Code: 200, Data: []byte(fmt.Sprintf(
 			`{"id":"%s","name":"%v","addr":"%v","connections":%d}`,
 			conn.ID(), name, addr, server.ConnManager().Count(),
-		)))
+		))})
 	})
 
 	// set_name — 设置连接元数据（SetMeta）
 	server.Handle("set_name", func(conn *ws.Conn, req *ws.Request) {
 		name := strings.Trim(string(req.Data), `"`)
 		conn.SetMeta("name", name)
-		conn.SendOK(req.ID, req.Action, []byte(fmt.Sprintf(`{"name":"%s"}`, name)))
+		conn.SendResp(&ws.Response{ID: req.ID, Action: req.Action, Code: 200, Data: []byte(fmt.Sprintf(`{"name":"%s"}`, name))})
 	})
 
 	// broadcast — 全部广播（Broadcast）
 	server.Handle("broadcast", func(conn *ws.Conn, req *ws.Request) {
-		server.Broadcast("notification", req.Data)
-		conn.SendOK(req.ID, req.Action, []byte(`{"sent":true}`))
+		server.Broadcast(&ws.Response{ID: req.ID, Action: "notification", Code: 200, Data: req.Data})
+		conn.SendResp(&ws.Response{ID: req.ID, Action: req.Action, Code: 200, Data: []byte(`{"sent":true}`)})
 	})
 
 	// targeted — 条件广播，排除发送者（BroadcastFilter）
 	server.Handle("targeted", func(conn *ws.Conn, req *ws.Request) {
-		server.BroadcastFilter("targeted_msg", req.Data, func(c *ws.Conn) bool {
-			return c.ID() != conn.ID()
-		})
-		conn.SendOK(req.ID, req.Action, []byte(`{"sent":true,"exclude_self":true}`))
+		server.BroadcastFilter(
+			&ws.Response{ID: req.ID, Action: "targeted_msg", Code: 200, Data: req.Data},
+			func(c *ws.Conn) bool {
+				return c.ID() != conn.ID()
+			},
+		)
+		conn.SendResp(&ws.Response{ID: req.ID, Action: req.Action, Code: 200, Data: []byte(`{"sent":true,"exclude_self":true}`)})
 	})
 
 	// list — 遍历连接（ConnManager.Range + Conn.ID + Conn.LastActiveTime）
@@ -108,9 +111,9 @@ func main() {
 				c.ID(), name, c.LastActiveTime().Format(time.RFC3339)))
 			return true
 		})
-		conn.SendOK(req.ID, req.Action, []byte(
+		conn.SendResp(&ws.Response{ID: req.ID, Action: req.Action, Code: 200, Data: []byte(
 			fmt.Sprintf(`{"count":%d,"clients":[%s]}`, len(items), strings.Join(items, ",")),
-		))
+		)})
 	})
 
 	// get_conn — 按 ID 查找连接（ConnManager.Get）
@@ -118,14 +121,14 @@ func main() {
 		targetID := strings.Trim(string(req.Data), `"`)
 		target := server.ConnManager().Get(targetID)
 		if target == nil {
-			conn.SendError(req.ID, req.Action, 404, "连接不存在")
+			conn.SendResp(&ws.Response{ID: req.ID, Action: req.Action, Code: 404, Data: []byte("连接不存在")})
 			return
 		}
 		name, _ := target.GetMeta("name")
-		conn.SendOK(req.ID, req.Action, []byte(fmt.Sprintf(
+		conn.SendResp(&ws.Response{ID: req.ID, Action: req.Action, Code: 200, Data: []byte(fmt.Sprintf(
 			`{"id":"%s","name":"%v","last_active":"%s"}`,
 			target.ID(), name, target.LastActiveTime().Format(time.RFC3339),
-		)))
+		))})
 	})
 
 	// subscribe — 订阅 topic（Conn.Subscribe）
@@ -134,13 +137,13 @@ func main() {
 			Topics []string `json:"topics"`
 		}
 		if err := json.Unmarshal(req.Data, &body); err != nil || len(body.Topics) == 0 {
-			conn.SendError(req.ID, req.Action, 400, "invalid topics")
+			conn.SendResp(&ws.Response{ID: req.ID, Action: req.Action, Code: 400, Data: []byte("invalid topics")})
 			return
 		}
 		conn.Subscribe(body.Topics...)
 		topics := conn.Subscriptions()
 		data, _ := json.Marshal(map[string]any{"subscribed": body.Topics, "all": topics})
-		conn.SendOK(req.ID, req.Action, data)
+		conn.SendResp(&ws.Response{ID: req.ID, Action: req.Action, Code: 200, Data: data})
 	})
 
 	// unsubscribe — 取消订阅 topic（Conn.Unsubscribe）
@@ -149,13 +152,13 @@ func main() {
 			Topics []string `json:"topics"`
 		}
 		if err := json.Unmarshal(req.Data, &body); err != nil || len(body.Topics) == 0 {
-			conn.SendError(req.ID, req.Action, 400, "invalid topics")
+			conn.SendResp(&ws.Response{ID: req.ID, Action: req.Action, Code: 400, Data: []byte("invalid topics")})
 			return
 		}
 		conn.Unsubscribe(body.Topics...)
 		topics := conn.Subscriptions()
 		data, _ := json.Marshal(map[string]any{"unsubscribed": body.Topics, "all": topics})
-		conn.SendOK(req.ID, req.Action, data)
+		conn.SendResp(&ws.Response{ID: req.ID, Action: req.Action, Code: 200, Data: data})
 	})
 
 	// publish — 向 topic 发布消息（Server.Publish）
@@ -164,13 +167,13 @@ func main() {
 			Topic string `json:"topic"`
 		}
 		if err := json.Unmarshal(req.Data, &body); err != nil || body.Topic == "" {
-			conn.SendError(req.ID, req.Action, 400, "invalid topic")
+			conn.SendResp(&ws.Response{ID: req.ID, Action: req.Action, Code: 400, Data: []byte("invalid topic")})
 			return
 		}
 		count := server.TopicCount(body.Topic)
-		server.Publish(body.Topic, req.Data)
+		server.Publish(body.Topic, &ws.Response{Action: body.Topic, Code: 200, Data: req.Data})
 		data, _ := json.Marshal(map[string]any{"topic": body.Topic, "delivered": count})
-		conn.SendOK(req.ID, req.Action, data)
+		conn.SendResp(&ws.Response{ID: req.ID, Action: req.Action, Code: 200, Data: data})
 	})
 
 	// topics — 查看所有 topic 和当前订阅（Server.Topics + Conn.Subscriptions）
@@ -185,7 +188,7 @@ func main() {
 			result[t+"_count"] = server.TopicCount(t)
 		}
 		data, _ := json.Marshal(result)
-		conn.SendOK(req.ID, req.Action, data)
+		conn.SendResp(&ws.Response{ID: req.ID, Action: req.Action, Code: 200, Data: data})
 	})
 
 	// 连接回调 — 可通过 r 访问 HTTP 请求信息（Header/Cookie/Gin Context）

@@ -58,11 +58,21 @@ func (c *Conn) LastActiveTime() time.Time {
 
 // SetMeta 设置元数据（线程安全）
 func (c *Conn) SetMeta(key string, val any) {
+	if c.ctx.Value(connMetaKey{}) == nil {
+		c.ctx = context.WithValue(c.ctx, connMetaKey{}, &sync.Map{})
+	}
+	if val == nil {
+		c.ctx.Value(connMetaKey{}).(*sync.Map).Delete(key)
+		return
+	}
 	c.ctx.Value(connMetaKey{}).(*sync.Map).Store(key, val)
 }
 
 // GetMeta 获取元数据（线程安全）
 func (c *Conn) GetMeta(key string) (any, bool) {
+	if c.ctx.Value(connMetaKey{}) == nil {
+		return nil, false
+	}
 	return c.ctx.Value(connMetaKey{}).(*sync.Map).Load(key)
 }
 
@@ -160,15 +170,17 @@ func (c *Conn) init(r *http.Request) {
 func (c *Conn) Close() error {
 	var err error
 	c.closeOnce.Do(func() {
+		// 先尝试发送 Close 帧，确保对端能收到正常关闭通知
+		err = c.conn.Close(websocket.StatusNormalClosure, "")
+
+		// 然后取消上下文并从管理器移除连接
+		c.cancel()
 		c.server.conns.remove(c)
 		c.server.topics.unsubscribeAll(c)
-		c.cancel()
 
 		if c.server.onDisconnect != nil {
 			c.server.onDisconnect(c)
 		}
-
-		err = c.conn.CloseNow()
 	})
 	return err
 }
@@ -176,21 +188,6 @@ func (c *Conn) Close() error {
 // ============================================================================
 // 发送
 // ============================================================================
-
-// Send 发送响应
-func (c *Conn) Send(id, action string, code int32, data []byte) error {
-	return c.SendResp(&types.Response{ID: id, Action: action, Code: code, Data: data})
-}
-
-// SendOK 发送成功响应（状态码 200）
-func (c *Conn) SendOK(id, action string, data []byte) error {
-	return c.SendResp(&types.Response{ID: id, Action: action, Code: 200, Data: data})
-}
-
-// SendError 发送错误响应
-func (c *Conn) SendError(id, action string, code int32, msg string) error {
-	return c.SendResp(&types.Response{ID: id, Action: action, Code: code, Msg: msg})
-}
 
 // SendResp 发送响应（非阻塞，缓冲区满返回 ErrSendFull）
 func (c *Conn) SendResp(resp *types.Response) error {
@@ -229,7 +226,11 @@ func (c *Conn) readLoop() {
 		c.lastActive.Store(time.Now().UnixMilli())
 
 		if c.server.cfg.maxMessageSize > 0 && len(data) > c.server.cfg.maxMessageSize {
-			_ = c.SendError("", "invalid_request", 413, "message too large")
+			_ = c.SendResp(&types.Response{
+				Action: "invalid_request",
+				Code:   413,
+				Msg:    "message too large",
+			})
 			continue
 		}
 
@@ -244,7 +245,11 @@ func (c *Conn) readLoop() {
 
 		req, err := reqCodec.UnmarshalRequest(data)
 		if err != nil {
-			_ = c.SendError("", "invalid_request", 400, fmt.Sprintf("message decoded as %s", reqCodec.Name()))
+			_ = c.SendResp(&types.Response{
+				Action: "invalid_request",
+				Code:   400,
+				Msg:    fmt.Sprintf("message decoded as %s", reqCodec.Name()),
+			})
 			continue
 		}
 
@@ -256,7 +261,11 @@ func (c *Conn) readLoop() {
 		c.server.handlersMu.RUnlock()
 
 		if handler == nil {
-			_ = c.SendError(req.ID, req.Action, 404, "handler not found")
+			_ = c.SendResp(&types.Response{
+				Action: req.Action,
+				Code:   404,
+				Msg:    "handler not found",
+			})
 			continue
 		}
 
@@ -264,7 +273,11 @@ func (c *Conn) readLoop() {
 		go func(h Handler, r *types.Request) {
 			defer func() {
 				if v := recover(); v != nil {
-					_ = c.SendError(r.ID, r.Action, 500, "internal server error")
+					_ = c.SendResp(&types.Response{
+						Action: r.Action,
+						Code:   500,
+						Msg:    "internal server error",
+					})
 				}
 			}()
 			h(c, r)
@@ -291,10 +304,7 @@ func (c *Conn) writeLoop() {
 // healthLoop 健康检查，定期 Ping 保持连接活跃
 // coder/websocket 的 Ping 可与 Read 并发调用
 func (c *Conn) healthLoop() {
-	interval := c.server.cfg.heartbeat / 2
-	if interval < time.Second {
-		interval = time.Second
-	}
+	interval := max(c.server.cfg.heartbeat/2, time.Second)
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 

@@ -25,7 +25,7 @@ func authMiddleware(next ws.Handler) ws.Handler {
 	return func(conn *ws.Conn, req *ws.Request) {
 		token, _ := conn.GetMeta("token")
 		if token == nil {
-			conn.SendError(req.ID, req.Action, 401, "unauthorized")
+			conn.SendResp(&ws.Response{ID: req.ID, Action: req.Action, Code: 401, Data: []byte(`{"sent":false,"error":"unauthorized"}`)})
 			return
 		}
 		next(conn, req)
@@ -50,31 +50,34 @@ func main() {
 
 	// 注册处理器
 	server.Handle("echo", func(conn *ws.Conn, req *ws.Request) {
-		conn.SendOK(req.ID, req.Action, req.Data)
+		conn.SendResp(&ws.Response{ID: req.ID, Action: req.Action, Code: 200, Data: req.Data})
 	})
 
 	server.Handle("ping", func(conn *ws.Conn, req *ws.Request) {
-		conn.SendOK(req.ID, req.Action, []byte(`{"status":"ok"}`))
+		conn.SendResp(&ws.Response{ID: req.ID, Action: req.Action, Code: 200, Data: []byte(`{"status":"ok"}`)})
 	})
 
 	server.Handle("info", func(conn *ws.Conn, req *ws.Request) {
-		conn.SendOK(req.ID, req.Action, []byte(
+		conn.SendResp(&ws.Response{ID: req.ID, Action: req.Action, Code: 200, Data: []byte(
 			fmt.Sprintf(`{"id":"%s","connections":%d}`, conn.ID(), server.ConnManager().Count()),
-		))
+		)})
 	})
 
 	// 广播处理器
 	server.Handle("broadcast", func(conn *ws.Conn, req *ws.Request) {
-		server.Broadcast("notification", req.Data)
-		conn.SendOK(req.ID, req.Action, []byte(`{"sent":true}`))
+		server.Broadcast(&ws.Response{Action: "notification", Code: 200, Data: req.Data})
+		conn.SendResp(&ws.Response{ID: req.ID, Action: req.Action, Code: 200, Data: []byte(`{"sent":true}`)})
 	})
 
 	// 条件广播：只发给指定连接
 	server.Handle("targeted", func(conn *ws.Conn, req *ws.Request) {
-		server.BroadcastFilter("targeted_msg", req.Data, func(c *ws.Conn) bool {
-			return c.ID() != conn.ID() // 不发给自己
-		})
-		conn.SendOK(req.ID, req.Action, []byte(`{"sent":true}`))
+		server.BroadcastFilter(
+			&ws.Response{Action: "targeted_msg", Code: 200, Data: req.Data},
+			func(c *ws.Conn) bool {
+				return c.ID() != conn.ID() // 不发给自己
+			},
+		)
+		conn.SendResp(&ws.Response{ID: req.ID, Action: req.Action, Code: 200, Data: []byte(`{"sent":true}`)})
 	})
 
 	// 遍历连接
@@ -84,9 +87,9 @@ func main() {
 			ids = append(ids, c.ID())
 			return true
 		})
-		conn.SendOK(req.ID, req.Action, []byte(
+		conn.SendResp(&ws.Response{ID: req.ID, Action: req.Action, Code: 200, Data: []byte(
 			fmt.Sprintf(`{"count":%d,"ids":"%v"}`, len(ids), ids),
-		))
+		)})
 	})
 
 	// 连接回调 — 通过 r 访问 HTTP 请求信息

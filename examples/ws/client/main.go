@@ -78,7 +78,7 @@ func main() {
 	total := 10
 	wg.Add(total)
 
-	var sendOk, sendFail atomic.Int64
+	var SendData, sendFail atomic.Int64
 	start := time.Now()
 
 	for i := 0; i < total; i++ {
@@ -91,7 +91,7 @@ func main() {
 				sendFail.Add(1)
 				wg.Done() // 发送失败也要 Done，否则永远等不到
 			} else {
-				sendOk.Add(1)
+				SendData.Add(1)
 			}
 		}(i)
 	}
@@ -105,7 +105,7 @@ func main() {
 	success := recvCount.Load()
 	qps := float64(success) / duration.Seconds()
 	log.Printf("性能测试完成: 发送成功=%d 失败=%d 响应=%d 耗时=%v QPS=%.1f",
-		sendOk.Load(), sendFail.Load(), success, duration.Round(time.Millisecond), qps)
+		SendData.Load(), sendFail.Load(), success, duration.Round(time.Millisecond), qps)
 }
 
 // waitWithTimeout 等待 WaitGroup 完成或超时
