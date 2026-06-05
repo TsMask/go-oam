@@ -21,8 +21,6 @@ go get github.com/tsmask/go-oam/pkg/...
 | [ringbuffer](#ringbuffer) | 泛型环形缓冲区 | 无 |
 | [fetch](#fetch) | HTTP 客户端 + 异步推送队列 | `go-resty` |
 | [push](#push) | 数据推送领域（告警/KPI/话单等） | 无 |
-| [ping](#ping) | ICMP 探测 + 命令行终端 | `pro-bing` |
-| [iperf](#iperf) | 网络性能测试命令行终端 | 无 |
 | [state](#state) | 系统资源查询（CPU/内存/磁盘/网络/进程） | `gopsutil` |
 | [socket](#socket) | TCP/UDP 客户端与服务端 | 无 |
 | [telnet](#telnet) | Telnet 客户端与服务端 | 无 |
@@ -41,7 +39,7 @@ import "github.com/tsmask/go-oam/pkg/cmd"
 
 ```go
 output, err := cmd.Exec("ls -la")
-output, err := cmd.ExecWithTimeOut("ping -c 3 8.8.8.8", 10*time.Second)
+output, err := cmd.ExecWithTimeOut("ls -la", 10*time.Second)
 output, err := cmd.ExecCommand("ls", "-r", "-l")
 ```
 
@@ -59,7 +57,7 @@ output, err := cmd.ExecCommand("ls", "-r", "-l")
 ```go
 cmd.CheckIllegal("arg1", "arg2")   // 检查特殊字符
 cmd.HasNoPasswordSudo()             // 是否有 sudo 权限
-cmd.Which("iperf3")                 // 可执行文件是否在 PATH 中
+cmd.Which("ls")                 // 可执行文件是否在 PATH 中
 ```
 
 **Shell 会话**
@@ -357,54 +355,6 @@ kpi.KPITimerStop()
 
 ---
 
-## ping
-
-ICMP 探测（基于 pro-bing）+ 命令行终端。
-
-```go
-import "github.com/tsmask/go-oam/pkg/ping"
-```
-
-**ICMP 探测**
-
-```go
-p := ping.Ping{Addr: "8.8.8.8", Count: 4, Timeout: 5 * time.Second}
-stats, err := p.Statistics(p)
-// stats: map[string]int64{"sent": 4, "recv": 4, "loss": 0, "avg_rtt": 12345}
-```
-
-**命令行终端**
-
-```go
-t := ping.Terminal{Addr: "8.8.8.8", Count: 4}
-cmd, _ := t.ParseOptions()  // 拼装 ping 命令
-ver, _ := t.Version()        // 查询 ping 版本
-```
-
----
-
-## iperf
-
-网络性能测试命令行终端。
-
-```go
-import "github.com/tsmask/go-oam/pkg/iperf"
-```
-
-```go
-t := iperf.Terminal{
-    Mode:    "client",
-    Host:    "10.0.0.1",
-    Port:    "5201",
-    Time:    10,
-    Version: "V3",
-}
-cmd, _ := t.ParseOptions("V3")  // 拼装 iperf3 命令
-ver, _ := t.Version("V3")        // 查询 iperf3 版本
-```
-
----
-
 ## state
 
 系统资源查询，合并了进程/网络连接/监控能力。
@@ -486,7 +436,7 @@ resp, err := c.Send([]byte("hello"), 5*time.Second, func(b []byte) bool {
 })
 
 // 仅超时
-resp, err := c.Send([]byte("ping"), 3*time.Second, nil)
+resp, err := c.Send([]byte("ls"), 3*time.Second, nil)
 ```
 
 **TCP 服务端**
