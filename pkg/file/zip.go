@@ -23,9 +23,8 @@ func ZipPackDir(dirPath, zipPath string) error {
 	defer f.Close()
 
 	zw := zip.NewWriter(f)
-	defer zw.Close()
 
-	return filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
+	walkErr := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -42,7 +41,8 @@ func ZipPackDir(dirPath, zipPath string) error {
 		if err != nil {
 			return err
 		}
-		header.Name = relPath
+		// ZIP 规范要求条目名使用正斜杠，避免 Windows 反斜杠导致目录结构丢失
+		header.Name = filepath.ToSlash(relPath)
 		header.Method = zip.Deflate
 
 		writer, err := zw.CreateHeader(header)
@@ -60,6 +60,12 @@ func ZipPackDir(dirPath, zipPath string) error {
 		_, err = io.CopyBuffer(writer, src, buf)
 		return err
 	})
+
+	// 显式关闭以确保中央目录写入成功，错误不可忽略
+	if cerr := zw.Close(); walkErr == nil {
+		walkErr = cerr
+	}
+	return walkErr
 }
 
 // ZipPackFile 将单个文件打包为 zip 文件。
@@ -74,7 +80,6 @@ func ZipPackFile(filePath, zipPath string) error {
 	defer f.Close()
 
 	zw := zip.NewWriter(f)
-	defer zw.Close()
 
 	src, err := os.Open(filePath)
 	if err != nil {
@@ -101,6 +106,10 @@ func ZipPackFile(filePath, zipPath string) error {
 
 	buf := make([]byte, zipBufSize)
 	_, err = io.CopyBuffer(writer, src, buf)
+	// 显式关闭以确保中央目录写入成功，错误不可忽略
+	if cerr := zw.Close(); err == nil {
+		err = cerr
+	}
 	return err
 }
 
@@ -140,7 +149,7 @@ func ZipUnpack(zipPath, dirPath string) error {
 			return err
 		}
 
-		dst, createErr := os.Create(target)
+		dst, createErr := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
 		if createErr != nil {
 			rc.Close()
 			return createErr

@@ -14,6 +14,9 @@ const tarBufSize = 32 * 1024
 
 // TarPack 将目录打包为普通 tar 文件。
 func TarPack(dirPath, tarPath string) error {
+	if err := os.MkdirAll(filepath.Dir(tarPath), 0755); err != nil {
+		return err
+	}
 	f, err := os.Create(tarPath)
 	if err != nil {
 		return err
@@ -71,9 +74,7 @@ func TarGzUnpack(tarGzPath, dirPath string) error {
 
 // tarPackWalk 遍历目录并将所有文件写入 tar writer。
 func tarPackWalk(dirPath string, tw *tar.Writer) error {
-	defer tw.Close()
-
-	return filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
+	walkErr := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -88,7 +89,8 @@ func tarPackWalk(dirPath string, tw *tar.Writer) error {
 		if err != nil {
 			return err
 		}
-		header.Name = relPath
+		// tar 条目名使用正斜杠，避免 Windows 反斜杠导致目录结构丢失
+		header.Name = filepath.ToSlash(relPath)
 		if err := tw.WriteHeader(header); err != nil {
 			return err
 		}
@@ -109,6 +111,12 @@ func tarPackWalk(dirPath string, tw *tar.Writer) error {
 		_, err = io.CopyBuffer(tw, src, buf)
 		return err
 	})
+
+	// 显式关闭以确保尾部数据刷盘，错误不可忽略
+	if cerr := tw.Close(); walkErr == nil {
+		walkErr = cerr
+	}
+	return walkErr
 }
 
 // tarUnpackReader 从 tar reader 流式解包到目录。
@@ -144,7 +152,7 @@ func tarUnpackReader(r io.Reader, dirPath string) error {
 			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
 				return err
 			}
-			dst, createErr := os.Create(target)
+			dst, createErr := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, os.FileMode(header.Mode))
 			if createErr != nil {
 				return createErr
 			}

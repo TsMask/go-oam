@@ -16,11 +16,17 @@ func CopyFile(srcPath, dstPath string) error {
 	}
 	defer src.Close()
 
+	// 保留源文件权限，避免可执行文件复制后丢失执行位
+	info, err := src.Stat()
+	if err != nil {
+		return fmt.Errorf("stat source: %w", err)
+	}
+
 	if err = os.MkdirAll(filepath.Dir(dstPath), 0775); err != nil {
 		return fmt.Errorf("create dir: %w", err)
 	}
 
-	dst, err := os.Create(dstPath)
+	dst, err := os.OpenFile(dstPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode())
 	if err != nil {
 		return fmt.Errorf("create dest: %w", err)
 	}

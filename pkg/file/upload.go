@@ -261,6 +261,10 @@ func mergeFiles(chunkDir, writePath string) error {
 
 	// 清理分片目录
 	os.RemoveAll(chunkDir)
+	// 合并失败时删除不完整的输出文件
+	if mergeErr != nil {
+		os.Remove(writePath)
+	}
 	return mergeErr
 }
 
