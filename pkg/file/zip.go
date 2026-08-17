@@ -5,7 +5,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 // zipBufSize zip 读写缓冲区大小 32KB
@@ -13,15 +12,17 @@ const zipBufSize = 32 * 1024
 
 // ZipPackDir 将目录打包为 zip 文件。
 func ZipPackDir(dirPath, zipPath string) error {
-	if err := os.MkdirAll(filepath.Dir(zipPath), 0755); err != nil {
-		return err
-	}
-	f, err := os.Create(zipPath)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
+	return withPathLock(zipPath, func() error {
+		if err := os.MkdirAll(filepath.Dir(zipPath), 0755); err != nil {
+			return err
+		}
+		return writeFileAtomic(zipPath, 0644, func(f *os.File) error {
+			return zipPackDirWriter(dirPath, f)
+		})
+	})
+}
 
+func zipPackDirWriter(dirPath string, f *os.File) error {
 	zw := zip.NewWriter(f)
 
 	walkErr := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
@@ -70,16 +71,18 @@ func ZipPackDir(dirPath, zipPath string) error {
 
 // ZipPackFile 将单个文件打包为 zip 文件。
 func ZipPackFile(filePath, zipPath string) error {
-	if err := os.MkdirAll(filepath.Dir(zipPath), 0755); err != nil {
-		return err
-	}
-	f, err := os.Create(zipPath)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
+	return withPathLock(zipPath, func() error {
+		if err := os.MkdirAll(filepath.Dir(zipPath), 0755); err != nil {
+			return err
+		}
+		return writeFileAtomic(zipPath, 0644, func(out *os.File) error {
+			return zipPackFileWriter(filePath, out)
+		})
+	})
+}
 
-	zw := zip.NewWriter(f)
+func zipPackFileWriter(filePath string, out *os.File) error {
+	zw := zip.NewWriter(out)
 
 	src, err := os.Open(filePath)
 	if err != nil {
@@ -115,51 +118,52 @@ func ZipPackFile(filePath, zipPath string) error {
 
 // ZipUnpack 解压 zip 文件到目录。
 func ZipUnpack(zipPath, dirPath string) error {
-	r, err := zip.OpenReader(zipPath)
-	if err != nil {
-		return err
-	}
-	defer r.Close()
+	return withPathLock(dirPath, func() error {
+		r, err := zip.OpenReader(zipPath)
+		if err != nil {
+			return err
+		}
+		defer r.Close()
 
-	if err := os.MkdirAll(dirPath, 0755); err != nil {
-		return err
-	}
-
-	buf := make([]byte, zipBufSize)
-	for _, f := range r.File {
-		// 防止路径穿越攻击
-		target := filepath.Join(dirPath, f.Name)
-		if !strings.HasPrefix(filepath.Clean(target), filepath.Clean(dirPath)+string(os.PathSeparator)) {
-			continue
+		if err := os.MkdirAll(dirPath, 0755); err != nil {
+			return err
 		}
 
-		if f.FileInfo().IsDir() {
-			if err := os.MkdirAll(target, 0755); err != nil {
+		buf := make([]byte, zipBufSize)
+		for _, f := range r.File {
+			target, targetErr := archiveTarget(dirPath, f.Name)
+			if targetErr != nil {
+				return targetErr
+			}
+
+			if f.FileInfo().IsDir() {
+				if err := os.MkdirAll(target, 0755); err != nil {
+					return err
+				}
+				continue
+			}
+
+			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
 				return err
 			}
-			continue
-		}
 
-		if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
-			return err
-		}
+			rc, err := f.Open()
+			if err != nil {
+				return err
+			}
 
-		rc, err := f.Open()
-		if err != nil {
-			return err
-		}
-
-		dst, createErr := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
-		if createErr != nil {
+			dst, createErr := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode().Perm())
+			if createErr != nil {
+				rc.Close()
+				return createErr
+			}
+			_, err = io.CopyBuffer(dst, rc, buf)
+			dst.Close()
 			rc.Close()
-			return createErr
+			if err != nil {
+				return err
+			}
 		}
-		_, err = io.CopyBuffer(dst, rc, buf)
-		dst.Close()
-		rc.Close()
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+		return nil
+	})
 }

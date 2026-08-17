@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 // tarBufSize tar 读写缓冲区大小 32KB
@@ -14,62 +13,65 @@ const tarBufSize = 32 * 1024
 
 // TarPack 将目录打包为普通 tar 文件。
 func TarPack(dirPath, tarPath string) error {
-	if err := os.MkdirAll(filepath.Dir(tarPath), 0755); err != nil {
-		return err
-	}
-	f, err := os.Create(tarPath)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	return tarPackWalk(dirPath, tar.NewWriter(f))
+	return withPathLock(tarPath, func() error {
+		if err := os.MkdirAll(filepath.Dir(tarPath), 0755); err != nil {
+			return err
+		}
+		return writeFileAtomic(tarPath, 0644, func(f *os.File) error {
+			return tarPackWalk(dirPath, tar.NewWriter(f))
+		})
+	})
 }
 
 // TarUnpack 解包普通 tar 文件到目录。
 func TarUnpack(tarPath, dirPath string) error {
-	f, err := os.Open(tarPath)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	return tarUnpackReader(f, dirPath)
+	return withPathLock(dirPath, func() error {
+		f, err := os.Open(tarPath)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		return tarUnpackReader(f, dirPath)
+	})
 }
 
 // TarGzPack 将目录打包为 tar.gz 文件。
 func TarGzPack(dirPath, tarGzPath string) error {
-	if err := os.MkdirAll(filepath.Dir(tarGzPath), 0755); err != nil {
-		return err
-	}
-	f, err := os.Create(tarGzPath)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	gw, err := gzip.NewWriterLevel(f, gzip.BestSpeed)
-	if err != nil {
-		return err
-	}
-	defer gw.Close()
-
-	return tarPackWalk(dirPath, tar.NewWriter(gw))
+	return withPathLock(tarGzPath, func() error {
+		if err := os.MkdirAll(filepath.Dir(tarGzPath), 0755); err != nil {
+			return err
+		}
+		return writeFileAtomic(tarGzPath, 0644, func(f *os.File) error {
+			gw, err := gzip.NewWriterLevel(f, gzip.BestSpeed)
+			if err != nil {
+				return err
+			}
+			if err := tarPackWalk(dirPath, tar.NewWriter(gw)); err != nil {
+				_ = gw.Close()
+				return err
+			}
+			return gw.Close()
+		})
+	})
 }
 
 // TarGzUnpack 解压 tar.gz 文件到目录。
 func TarGzUnpack(tarGzPath, dirPath string) error {
-	f, err := os.Open(tarGzPath)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
+	return withPathLock(dirPath, func() error {
+		f, err := os.Open(tarGzPath)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
 
-	gr, err := gzip.NewReader(f)
-	if err != nil {
-		return err
-	}
-	defer gr.Close()
+		gr, err := gzip.NewReader(f)
+		if err != nil {
+			return err
+		}
+		defer gr.Close()
 
-	return tarUnpackReader(gr, dirPath)
+		return tarUnpackReader(gr, dirPath)
+	})
 }
 
 // tarPackWalk 遍历目录并将所有文件写入 tar writer。
@@ -137,10 +139,9 @@ func tarUnpackReader(r io.Reader, dirPath string) error {
 			return err
 		}
 
-		// 防止路径穿越攻击
-		target := filepath.Join(dirPath, header.Name)
-		if !strings.HasPrefix(filepath.Clean(target), filepath.Clean(dirPath)+string(os.PathSeparator)) {
-			continue
+		target, targetErr := archiveTarget(dirPath, header.Name)
+		if targetErr != nil {
+			return targetErr
 		}
 
 		switch header.Typeflag {
@@ -152,7 +153,7 @@ func tarUnpackReader(r io.Reader, dirPath string) error {
 			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
 				return err
 			}
-			dst, createErr := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, os.FileMode(header.Mode))
+			dst, createErr := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, os.FileMode(header.Mode).Perm())
 			if createErr != nil {
 				return createErr
 			}

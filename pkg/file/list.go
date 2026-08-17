@@ -1,6 +1,7 @@
 package file
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -21,6 +22,12 @@ type FileEntry struct {
 //	entries, err := file.ListDir("/var/log", "")
 //	entries, err := file.ListDir("/var/log", "*.log")
 func ListDir(dirPath string, pattern string) ([]FileEntry, error) {
+	if pattern != "" {
+		if _, err := filepath.Match(pattern, ""); err != nil {
+			return nil, fmt.Errorf("match pattern %q: %w", pattern, err)
+		}
+	}
+
 	dirEntries, err := os.ReadDir(dirPath)
 	if err != nil {
 		return nil, err
@@ -30,14 +37,17 @@ func ListDir(dirPath string, pattern string) ([]FileEntry, error) {
 	for _, de := range dirEntries {
 		if pattern != "" {
 			matched, matchErr := filepath.Match(pattern, de.Name())
-			if matchErr != nil || !matched {
+			if matchErr != nil {
+				return nil, fmt.Errorf("match pattern %q: %w", pattern, matchErr)
+			}
+			if !matched {
 				continue
 			}
 		}
 
 		info, err := de.Info()
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("stat %s: %w", filepath.Join(dirPath, de.Name()), err)
 		}
 
 		results = append(results, newFileEntry(info))

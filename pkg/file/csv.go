@@ -6,40 +6,40 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 )
-
-var csvMu sync.Mutex
 
 // CSVWrite 写入 CSV 文件，线程安全。
 // appendMode 为 true 时追加到已有文件，为 false 时覆盖写入（先写临时文件再重命名，保证原子性）。
 func CSVWrite(filePath string, data [][]string, appendMode bool) error {
-	csvMu.Lock()
-	defer csvMu.Unlock()
+	return withPathLock(filePath, func() error {
+		return csvWriteLocked(filePath, data, appendMode)
+	})
+}
 
-	if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
-		return err
-	}
-
-	var f *os.File
-	var err error
-
+func csvWriteLocked(filePath string, data [][]string, appendMode bool) error {
 	if appendMode {
-		f, err = os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	} else {
-		f, err = os.OpenFile(filePath+".tmp", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-	}
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if !appendMode {
-			f.Close()
-			os.Remove(filePath + ".tmp")
+		if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
+			return err
 		}
-	}()
+		f, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
 
-	writer := csv.NewWriter(f)
+		writer := csv.NewWriter(f)
+		if err := writeCSVRows(writer, data); err != nil {
+			return err
+		}
+		return f.Sync()
+	}
+
+	return writeFileAtomic(filePath, 0644, func(f *os.File) error {
+		return writeCSVRows(csv.NewWriter(f), data)
+	})
+}
+
+func writeCSVRows(writer *csv.Writer, data [][]string) error {
 	for _, row := range data {
 		if err := writer.Write(row); err != nil {
 			return err
@@ -49,12 +49,6 @@ func CSVWrite(filePath string, data [][]string, appendMode bool) error {
 	if err := writer.Error(); err != nil {
 		return err
 	}
-	if err := f.Close(); err != nil {
-		return err
-	}
-	if !appendMode {
-		return os.Rename(filePath+".tmp", filePath)
-	}
 	return nil
 }
 
@@ -62,6 +56,12 @@ func CSVWrite(filePath string, data [][]string, appendMode bool) error {
 // 每读取一行调用 fn 回调，fn 返回非 nil 错误时立即停止读取。
 // header 传 nil 时自动读取首行作为表头，传非 nil 时跳过首行。
 func CSVRead(filePath string, header []string, fn func(row map[string]string) error) error {
+	return withPathLock(filePath, func() error {
+		return csvReadLocked(filePath, header, fn)
+	})
+}
+
+func csvReadLocked(filePath string, header []string, fn func(row map[string]string) error) error {
 	f, err := os.Open(filePath)
 	if err != nil {
 		return err

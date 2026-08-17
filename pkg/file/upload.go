@@ -3,13 +3,17 @@ package file
 import (
 	"fmt"
 	"io"
+	"math"
 	"os"
+	pathpkg "path"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/tsmask/go-oam/pkg/generate"
 )
@@ -20,7 +24,7 @@ import (
 type FileConfig struct {
 	Dir        string   // 存储目录，必填
 	MaxSize    int      // 最大文件大小 (MB)，小于1默认1MB
-	WhiteExts  []string // 扩展名白名单，如 [".jpg", ".png"]，为空则不限制
+	AllowExts  []string // 允许的扩展名，如 [".jpg", ".png"]，为空则不限制
 	MaxNameLen int      // 文件名最大长度，0默认100
 }
 
@@ -38,7 +42,20 @@ func (c FileConfig) maxSizeBytes() int64 {
 	if size < 1 {
 		size = 1
 	}
+	const bytesPerMB = int64(1024 * 1024)
+	if size > math.MaxInt64/bytesPerMB {
+		return math.MaxInt64
+	}
 	return size * 1024 * 1024
+}
+
+// withUploadLock serializes upload operations for one storage directory.
+func (c FileConfig) withUploadLock(fn func() error) error {
+	dir := c.Dir
+	if abs, err := filepath.Abs(dir); err == nil {
+		dir = abs
+	}
+	return withPathLock(filepath.Join(dir, ".upload-lock"), fn)
 }
 
 // ==================== 上传对象 ====================
@@ -56,51 +73,114 @@ type FileUpload struct {
 }
 
 // Save 校验并保存单文件，返回存储路径。
-// 校验内容：文件名长度、文件大小、扩展名白名单。
+// 校验内容：文件名长度、文件大小、允许的扩展名。
 // Reader 优先：流式写入临时文件，超过限制自动清理；Data 模式全量写入。
 func (u FileUpload) Save(cfg FileConfig) (string, error) {
-	if err := checkNameAndExt(cfg, u.Name); err != nil {
+	if u.Name == "" {
+		return "", fmt.Errorf("upload file name is empty")
+	}
+	if u.Reader == nil && u.Data == nil {
+		return "", fmt.Errorf("upload file %s has no Reader or Data", u.Name)
+	}
+
+	var dst string
+	err := cfg.withUploadLock(func() error {
+		if err := checkNameAndExt(cfg, u.Name); err != nil {
+			return err
+		}
+		dst = genPath(cfg.Dir, u.Name)
+
+		if u.Reader != nil {
+			return streamToPath(dst, u.Reader, cfg.maxSizeBytes())
+		}
+
+		data := *u.Data
+		limit := cfg.maxSizeBytes()
+		if int64(len(data)) > limit {
+			return fmt.Errorf("file size %d bytes exceeds limit %d bytes", len(data), limit)
+		}
+		return writeBytes(dst, data)
+	})
+	if err != nil {
 		return "", err
 	}
-	dst := genPath(cfg.Dir, u.Name)
-	if u.Reader != nil {
-		return dst, streamToPath(dst, u.Reader, cfg.maxSizeBytes())
-	}
-	data := *u.Data
-	limit := cfg.maxSizeBytes()
-	if int64(len(data)) > limit {
-		return "", fmt.Errorf("file size %d bytes exceeds limit %d bytes", len(data), limit)
-	}
-	return dst, writeBytes(dst, data)
+	return canonicalPath(dst), nil
 }
 
 // ChunkSave 校验并保存分片数据，存储为 {dir}/{id}/{index}。
-// 校验内容：分片大小不超过 MaxSize。
+// 校验内容：分片序号、分片大小不超过 MaxSize。
 // Reader 优先：流式写入临时文件，超过限制自动清理；Data 模式全量写入。
 func (u FileUpload) ChunkSave(cfg FileConfig) error {
-	dst := filepath.Join(cfg.Dir, u.Id, u.Index)
-	if u.Reader != nil {
-		return streamToPath(dst, u.Reader, cfg.maxSizeBytes())
+	index, err := parseChunkIndex(u.Index)
+	if err != nil {
+		return err
 	}
-	data := *u.Data
-	limit := cfg.maxSizeBytes()
-	if int64(len(data)) > limit {
-		return fmt.Errorf("chunk size %d exceeds limit %d", len(data), limit)
+	id, err := uploadIDPath(cfg, u.Id)
+	if err != nil {
+		return err
 	}
-	return writeBytes(dst, data)
+	if u.Reader == nil && u.Data == nil {
+		return fmt.Errorf("chunk %s/%d has no Reader or Data", u.Id, index)
+	}
+
+	return cfg.withUploadLock(func() error {
+		dst := filepath.Join(id, strconv.FormatUint(index, 10))
+		if u.Reader != nil {
+			return streamToPath(dst, u.Reader, cfg.maxSizeBytes())
+		}
+
+		data := *u.Data
+		limit := cfg.maxSizeBytes()
+		if int64(len(data)) > limit {
+			return fmt.Errorf("chunk size %d exceeds limit %d", len(data), limit)
+		}
+		return writeBytes(dst, data)
+	})
 }
 
-// ChunkList 查询已上传的分片文件名列表（按文件名排序）。
+// ChunkList 查询已上传的分片文件名列表（按分片序号排序）。
 func (c FileConfig) ChunkList(id string) ([]string, error) {
-	return listRegularFiles(filepath.Join(c.Dir, id))
+	chunkDir, err := uploadIDPath(c, id)
+	if err != nil {
+		return nil, err
+	}
+
+	var names []string
+	err = c.withUploadLock(func() error {
+		var listErr error
+		var chunks []chunkFile
+		chunks, listErr = readChunkFiles(chunkDir)
+		for _, chunk := range chunks {
+			names = append(names, chunk.name)
+		}
+		return listErr
+	})
+	return names, err
 }
 
 // ChunkMerge 合并分片为完整文件，按分片序号升序拼接。
 // 合并成功后自动删除分片目录，返回合并后的文件存储路径。
 func (c FileConfig) ChunkMerge(id string, fileName string) (string, error) {
-	chunkDir := filepath.Join(c.Dir, id)
-	dst := genPath(c.Dir, fileName)
-	return dst, mergeFiles(chunkDir, dst)
+	if fileName == "" {
+		return "", fmt.Errorf("merged file name is empty")
+	}
+	if err := checkNameAndExt(c, fileName); err != nil {
+		return "", err
+	}
+	chunkDir, err := uploadIDPath(c, id)
+	if err != nil {
+		return "", err
+	}
+
+	var dst string
+	err = c.withUploadLock(func() error {
+		dst = genPath(c.Dir, fileName)
+		return mergeFiles(chunkDir, dst)
+	})
+	if err != nil {
+		return "", err
+	}
+	return canonicalPath(dst), nil
 }
 
 // ==================== 文件读取 ====================
@@ -127,6 +207,9 @@ func ReadStream(filePath string, start, end int64) (FileRange, error) {
 		return FileRange{}, err
 	}
 	total := info.Size()
+	if total == 0 {
+		return FileRange{Data: []byte{}, Start: 0, End: -1, Total: 0}, nil
+	}
 
 	// 修正边界
 	if start < 0 {
@@ -134,6 +217,9 @@ func ReadStream(filePath string, start, end int64) (FileRange, error) {
 	}
 	if end <= 0 || end >= total {
 		end = total - 1
+	}
+	if start >= total {
+		return FileRange{Data: []byte{}, Start: total, End: total - 1, Total: total}, nil
 	}
 	if start > end {
 		start = end
@@ -151,34 +237,80 @@ func ReadStream(filePath string, start, end int64) (FileRange, error) {
 
 // ==================== 内部辅助 ====================
 
-// reIllegal 非法文件名字符 + 空白，统一替换为 * 号
+// reIllegal 非法文件名字符 + 空白，统一替换为 _ 号
 var reIllegal = regexp.MustCompile(`[\\/:*?"<>|\s]+`)
 
 // genPath 生成存储路径：{dir}/{清理名}_{随机码}.{ext}
-// 非法字符和空格替换为 *，首尾 * 去除
 func genPath(dir, fileName string) string {
-	ext := filepath.Ext(fileName)
-	base := strings.TrimSuffix(fileName, ext)
-	base = reIllegal.ReplaceAllString(base, "*")
-	base = strings.Trim(base, "*")
+	normalized := strings.ReplaceAll(fileName, `\`, `/`)
+	ext := pathpkg.Ext(normalized)
+	base := strings.TrimSuffix(normalized, ext)
+
+	base = reIllegal.ReplaceAllString(base, "_")
+	base = strings.Trim(base, "_")
 	if base == "" {
 		base = "file"
 	}
+	ext = sanitizeExtension(ext)
+
 	return filepath.Join(dir, base+"_"+generate.Code(6)+ext)
 }
 
-// checkNameAndExt 校验文件名长度和扩展名白名单
+func sanitizeExtension(ext string) string {
+	ext = reIllegal.ReplaceAllString(ext, "_")
+	ext = strings.TrimRight(ext, " .")
+	if ext == "." {
+		return ""
+	}
+	return ext
+}
+
+// checkNameAndExt 校验文件名长度和允许的扩展名
 func checkNameAndExt(cfg FileConfig, name string) error {
 	if len(name) > cfg.maxNameLen() {
 		return fmt.Errorf("file name length exceeds %d characters", cfg.maxNameLen())
 	}
-	if len(cfg.WhiteExts) > 0 {
+	if len(cfg.AllowExts) > 0 {
 		ext := strings.ToLower(filepath.Ext(name))
-		if !slices.Contains(cfg.WhiteExts, ext) {
+		allowed := slices.ContainsFunc(cfg.AllowExts, func(allowedExt string) bool {
+			return strings.EqualFold(allowedExt, ext)
+		})
+		if !allowed {
 			return fmt.Errorf("unsupported file extension %s", ext)
 		}
 	}
 	return nil
+}
+
+func uploadIDPath(cfg FileConfig, id string) (string, error) {
+	if !validUploadID(id) {
+		return "", fmt.Errorf("invalid upload id %q", id)
+	}
+	dir := cfg.Dir
+	if abs, err := filepath.Abs(dir); err == nil {
+		dir = abs
+	}
+	return filepath.Join(dir, id), nil
+}
+
+func validUploadID(id string) bool {
+	if id == "" || id == "." || id == ".." || !utf8.ValidString(id) || reIllegal.MatchString(id) {
+		return false
+	}
+	for _, r := range id {
+		if r < 32 || r == 0x7f || unicode.IsSpace(r) {
+			return false
+		}
+	}
+	return true
+}
+
+func parseChunkIndex(index string) (uint64, error) {
+	parsed, err := strconv.ParseUint(index, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid chunk index %q: %w", index, err)
+	}
+	return parsed, nil
 }
 
 // streamToPath 从 Reader 流式写入目标路径，超过 limit 字节则报错并清理临时文件。
@@ -187,99 +319,97 @@ func streamToPath(dst string, src io.Reader, limit int64) error {
 	if err := os.MkdirAll(filepath.Dir(dst), 0775); err != nil {
 		return err
 	}
-	tmp := dst + ".tmp"
-	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
-	if err != nil {
-		return err
-	}
-	n, err := io.Copy(f, io.LimitReader(src, limit+1))
-	if closeErr := f.Close(); err == nil {
-		if err = closeErr; err == nil && n > limit {
-			err = fmt.Errorf("file size exceeds limit %d bytes", limit)
+	return writeFileAtomic(dst, 0644, func(f *os.File) error {
+		n, err := io.Copy(f, io.LimitReader(src, limit+1))
+		if err == nil && n > limit {
+			return fmt.Errorf("file size exceeds limit %d bytes", limit)
 		}
-	}
-	if err != nil {
-		os.Remove(tmp)
 		return err
-	}
-	return os.Rename(tmp, dst)
+	})
 }
 
-// writeBytes 写入字节数据到目标路径，自动创建父目录
+// writeBytes 原子写入字节数据到目标路径，自动创建父目录
 func writeBytes(dst string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(dst), 0775); err != nil {
 		return err
 	}
-	return os.WriteFile(dst, data, 0644)
+	return writeFileAtomic(dst, 0644, func(f *os.File) error {
+		_, err := f.Write(data)
+		return err
+	})
+}
+
+type chunkFile struct {
+	name  string
+	index uint64
 }
 
 // mergeFiles 按数值序号合并分片目录中的文件到 writePath。
-// 合并完成后删除分片目录（无论成功失败）。
+// 合并成功后删除分片目录；失败时保留分片且不产生不完整输出。
 func mergeFiles(chunkDir, writePath string) error {
-	names, err := listRegularFiles(chunkDir)
+	files, err := readChunkFiles(chunkDir)
 	if err != nil {
-		return fmt.Errorf("read chunk dir: %w", err)
-	}
-	if len(names) == 0 {
-		return fmt.Errorf("no chunk files found in %s", chunkDir)
-	}
-
-	// 按文件名数值排序，确保分片顺序正确
-	sort.Slice(names, func(i, j int) bool {
-		ni, _ := strconv.Atoi(names[i])
-		nj, _ := strconv.Atoi(names[j])
-		return ni < nj
-	})
-
-	if err = os.MkdirAll(filepath.Dir(writePath), 0775); err != nil {
 		return err
 	}
+	if len(files) == 0 {
+		return fmt.Errorf("no chunk files found in %s", chunkDir)
+	}
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].index < files[j].index
+	})
 
-	out, err := os.Create(writePath)
+	if err := os.MkdirAll(filepath.Dir(writePath), 0775); err != nil {
+		return err
+	}
+	err = writeFileAtomic(writePath, 0644, func(out *os.File) error {
+		for _, chunk := range files {
+			src, openErr := os.Open(filepath.Join(chunkDir, chunk.name))
+			if openErr != nil {
+				return openErr
+			}
+			_, copyErr := io.Copy(out, src)
+			closeErr := src.Close()
+			if copyErr != nil {
+				return copyErr
+			}
+			if closeErr != nil {
+				return closeErr
+			}
+		}
+		return nil
+	})
 	if err != nil {
-		return fmt.Errorf("create output: %w", err)
+		return err
 	}
-
-	// 逐个分片流式追加到输出文件
-	var mergeErr error
-	for _, name := range names {
-		src, openErr := os.Open(filepath.Join(chunkDir, name))
-		if openErr != nil {
-			mergeErr = openErr
-			break
-		}
-		_, mergeErr = io.Copy(out, src)
-		src.Close()
-		if mergeErr != nil {
-			break
-		}
+	if err := os.RemoveAll(chunkDir); err != nil {
+		return fmt.Errorf("remove chunk dir: %w", err)
 	}
-
-	if closeErr := out.Close(); mergeErr == nil {
-		mergeErr = closeErr
-	}
-
-	// 清理分片目录
-	os.RemoveAll(chunkDir)
-	// 合并失败时删除不完整的输出文件
-	if mergeErr != nil {
-		os.Remove(writePath)
-	}
-	return mergeErr
+	return nil
 }
 
-// listRegularFiles 列出目录下的常规文件名（不含子目录），按文件名排序
-func listRegularFiles(dirPath string) ([]string, error) {
-	names := make([]string, 0)
+// readChunkFiles returns regular files in a chunk directory in index order.
+func readChunkFiles(dirPath string) ([]chunkFile, error) {
 	entries, err := os.ReadDir(dirPath)
 	if err != nil {
-		return names, err
+		return nil, err
 	}
+	files := make([]chunkFile, 0, len(entries))
+	seenIndexes := make(map[uint64]struct{}, len(entries))
 	for _, e := range entries {
 		if e.Type().IsRegular() {
-			names = append(names, e.Name())
+			index, parseErr := parseChunkIndex(e.Name())
+			if parseErr != nil {
+				return nil, fmt.Errorf("read chunk dir: %w", parseErr)
+			}
+			if _, exists := seenIndexes[index]; exists {
+				return nil, fmt.Errorf("duplicate chunk index %d in %s", index, dirPath)
+			}
+			seenIndexes[index] = struct{}{}
+			files = append(files, chunkFile{name: e.Name(), index: index})
 		}
 	}
-	sort.Strings(names)
-	return names, nil
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].index < files[j].index
+	})
+	return files, nil
 }
