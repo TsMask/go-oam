@@ -1,7 +1,6 @@
 # go-oam
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/olekukonko/tablewriter.svg)](https://pkg.go.dev/github.com/tsmask/go-oam)
-[![Go Report Card](https://goreportcard.com/badge/github.com/tsmask/go-oam)](https://goreportcard.com/report/github.com/tsmask/go-oam)
 [![License](https://img.shields.io/badge/license-BSD3-blue.svg)](LICENSE)
 [![Tag](https://img.shields.io/badge/TAG-list-success)](https://proxy.golang.org/github.com/tsmask/go-oam/@v/list)
 
